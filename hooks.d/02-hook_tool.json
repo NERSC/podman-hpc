@@ -1,0 +1,14 @@
+{
+    "version": "1.0.0",
+    "hook": {
+        "path": "/global/common/shared/das/podman/bin/hook_tool.py",
+        "args": ["hook_tool.py", "/global/common/shared/das/podman/etc/nersc-plug.yaml"],
+        "env": [ "XLOG_PLUGIN=/tmp/plugin.log" ]
+    },
+    "when": {
+        "always": true
+    },
+    "stages": ["prestart"]
+}
+
+
