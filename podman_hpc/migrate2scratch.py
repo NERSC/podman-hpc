@@ -128,10 +128,11 @@ def del_rec(base, otype, id, key="id"):
         json.dump(out, open(fn, "w"))
         _debug("Updated %s" % (fn))
 
+
 def drop_tag(base, image, id):
     data = read_json(base, "images")
     for img in data:
-        if img['id']==id:
+        if img['id'] == id:
             nnames = []
             for name in img['names']:
                 if name == image:
@@ -140,6 +141,7 @@ def drop_tag(base, image, id):
             img['names'] = nnames
     fn = os.path.join(base, "overlay-images/images.json")
     json.dump(data, open(fn, "w"))
+
 
 def add_recs(base, otype, recs):
     fn = os.path.join(base, "overlay-%s/%s.json" % (otype, otype))
@@ -201,7 +203,7 @@ def copy_overlay(srcd, dstd, img_id, layers):
         link = read_link_file(dstd, id)
         lname = os.path.join(dstd, "overlay", "l", link)
         tgt = os.path.join("..", id, "diff")
-        _debug("tgt=%s link=%s" %(tgt, lname))
+        _debug("tgt=%s link=%s" % (tgt, lname))
         if not os.path.exists(lname):
             os.symlink(tgt, lname)
         # Finally the squash file

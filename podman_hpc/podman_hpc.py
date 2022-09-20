@@ -4,7 +4,8 @@ import argparse
 import os
 import sys
 from copy import deepcopy
-from .migrate2scratch import migrate_image, read_json, get_img_info, remove_image
+from .migrate2scratch import migrate_image, remove_image
+from .migrate2scratch import read_json, get_img_info
 try:
     import toml
 except ModuleNotFoundError:
@@ -22,7 +23,7 @@ class config:
         self.bin_dir = os.path.dirname(__file__)
         try:
             self.user = os.getlogin()
-        except:
+        except Exception:
             self.user = os.environ["USER"]
         self.xdg_base = "/tmp/%d_hpc" % (self.uid)
         self.run_root = self.xdg_base
@@ -68,7 +69,7 @@ class config:
                     'seccomp_profile': 'unconfined',
                     'runtime': self.runtime
                   }
-               }
+                }
 
     def get_config_home(self):
         return "%s/config" % (self.xdg_base)
@@ -125,7 +126,8 @@ def _write_conf(fn, data, conf, overwrite=False):
     """
     Write out a conf file
     """
-    os.makedirs("/tmp/containers-user-%d/containers" % (conf.uid), exist_ok=True)
+    cdir = "/tmp/containers-user-%d/containers" % (conf.uid)
+    os.makedirs(cdir, exist_ok=True)
     os.makedirs("%s/containers" % (conf.get_config_home()), exist_ok=True)
     fp = os.path.join(conf.get_config_home(), "containers", fn)
     if not os.path.exists(fp) or overwrite:
@@ -145,9 +147,7 @@ def config_storage(conf, additional_stores=None):
     if additional_stores:
         for loc in additional_stores.split(","):
             opt["additionalimagestores"].append(loc)
-            
-    #stor_conf["storage"]["runroot"] = conf.run_root
-    #stor_conf["storage"]["graphroot"] = conf.graph_root
+
     return stor_conf
 
 
@@ -156,7 +156,6 @@ def config_containers(conf, args):
     Create a container conf object
     """
     cont_conf = conf.get_default_containers_conf()
-    options = []
     cmds = []
     if args.gpu:
         _, cmd = gpu(cont_conf)
@@ -270,7 +269,7 @@ def main():
         else:
             sys.stderr.write("Pull failed\n")
     elif comm == "rmi":
-        remove_image(image, conf.squash_dir) 
+        remove_image(image, conf.squash_dir)
     else:
         os.execve(conf.podman_bin, podman_args, env)
 
