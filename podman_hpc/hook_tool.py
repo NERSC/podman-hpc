@@ -93,7 +93,7 @@ def makedev(rp, tgt, major, minor, chardev=True):
     os.mknod(tgt2, mode, os.makedev(major, minor)) 
 
 
-if __name__ == "__main__":
+def main():
     plug_conf_fn = sys.argv[1]
 
     plug_conf = yaml.load(open(plug_conf_fn), Loader=yaml.FullLoader)
@@ -129,3 +129,6 @@ if __name__ == "__main__":
 
     ldconfig()
 
+
+if __name__ == "__main__":
+    main()

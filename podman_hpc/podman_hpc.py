@@ -4,7 +4,7 @@ import argparse
 import os
 import sys
 from copy import deepcopy
-from migrate2scratch import migrate_image, read_json, get_img_info, remove_image
+from .migrate2scratch import migrate_image, read_json, get_img_info, remove_image
 try:
     import toml
 except ModuleNotFoundError:
@@ -121,15 +121,6 @@ def gpu(data):
     return data, cmd
 
 
-def _read_conf(fn):
-    """
-    Read a conf file
-    """
-    with open("%s/.config/containers/%s" % (os.environ["HOME"], fn)) as f:
-        data = toml.load(f)
-    return data
-
-
 def _write_conf(fn, data, conf, overwrite=False):
     """
     Write out a conf file
@@ -146,7 +137,6 @@ def config_storage(conf, additional_stores=None):
     """
     Create a storage conf object
     """
-    # stor_conf = _read_conf("storage.conf")
     stor_conf = conf.get_default_store_conf()
     opt = stor_conf["storage"]["options"]
     if "additionalimagestores" not in stor_conf["storage"]["options"]:
@@ -165,7 +155,6 @@ def config_containers(conf, args):
     """
     Create a container conf object
     """
-    #cont_conf = _read_conf("containers.conf")
     cont_conf = conf.get_default_containers_conf()
     options = []
     cmds = []
@@ -221,7 +210,7 @@ def get_params(args):
     return comm, image
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(prog='podman-hpc', add_help=False)
     parser.add_argument("--gpu", action="store_true",
                         help="Enable gpu support")
@@ -284,3 +273,7 @@ if __name__ == "__main__":
         remove_image(image, conf.squash_dir) 
     else:
         os.execve(conf.podman_bin, podman_args, env)
+
+
+if __name__ == "__main__":
+    main()
