@@ -45,12 +45,16 @@ run fully unprivileged.
 %files
 %license LICENSE
 %doc CHANGELOG.md README.md
-%doc etc/
-%doc hooks.d/
+%config /etc/podman_hpc/nersc-plug.yaml
+%config /etc/podman_hpc/01-gpu.conf
+%config /etc/podman_hpc/02-mpich.conf
 /usr/bin/podman-hpc
 /usr/bin/hook_tool
+/usr/bin/fuse-overlayfs-wrap
 %{python3_sitelib}
 #%{python3_sitelib}/%{modname}-%{version}*
+/usr/share/containers/oci/hooks.d/02-hook_tool.json
+
 
 %changelog
 

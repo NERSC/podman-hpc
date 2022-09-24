@@ -2,7 +2,7 @@ mpich:
         annotation: gov.nersc.plugins.mpich
         env: ENABLE_MPICH
         copy:
-                - /global/common/shared/das/podman/etc/02-mpich.conf:/etc/ld.so.conf.d/02-mpich.conf
+                - /etc/podman_hpc/02-mpich.conf:/etc/ld.so.conf.d/02-mpich.conf
         bind:
                 - /dev/xpmem:/dev/xpmem
                 - /dev/shm:/dev/shm
@@ -15,7 +15,7 @@ mpich2:
         annotation: gov.nersc.plugins.mpich
         env: ENABLE_MPICH_SS
         copy:
-                - /global/common/shared/das/podman/etc/02-mpich.conf:/etc/ld.so.conf.d/02-mpich.conf
+                - /etc/podman_hpc/02-mpich.conf:/etc/ld.so.conf.d/02-mpich.conf
         bind:
                 - /dev/xpmem:/dev/xpmem
                 - /dev/shm:/dev/shm
@@ -92,7 +92,7 @@ gpu:
         annotation: gov.nersc.plugins.gpu
         env: ENABLE_GPU
         copy:
-                - /global/common/shared/das/podman/etc/01-gpu.conf:/etc/ld.so.conf.d/01-gpu.conf
+                - /etc/podman_hpc/01-gpu.conf:/etc/ld.so.conf.d/01-gpu.conf
                 - /usr/lib64/libnvcuvid.so:/usr/lib64/libnvcuvid.so
                 - /usr/lib64/libnvcuvid.so.1:/usr/lib64/libnvcuvid.so.1
                 - /usr/lib64/libnvcuvid.so.515.48.07:/usr/lib64/libnvcuvid.so.515.48.07

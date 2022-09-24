@@ -6,11 +6,7 @@ import sys
 from copy import deepcopy
 from .migrate2scratch import migrate_image, remove_image
 from .migrate2scratch import read_json, get_img_info
-try:
-    import toml
-except ModuleNotFoundError:
-    sys.path.append('/global/common/shared/das/podman/python')
-    import toml
+import toml
 
 
 class config:

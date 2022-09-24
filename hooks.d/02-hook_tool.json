@@ -1,9 +1,9 @@
 {
     "version": "1.0.0",
     "hook": {
-        "path": "/global/common/shared/das/podman/bin/hook_tool.py",
-        "args": ["hook_tool.py", "/global/common/shared/das/podman/etc/nersc-plug.yaml"],
-        "env": [ "XLOG_PLUGIN=/tmp/plugin.log" ]
+        "path": "/usr/bin/hook_tool",
+        "args": ["hook_tool", "/etc/podman_hpc/nersc-plug.yaml"],
+        "env": [ "DISABLED_LOG_PLUGIN=/tmp/plugin.log" ]
     },
     "when": {
         "always": true
