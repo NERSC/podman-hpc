@@ -4,8 +4,7 @@ import argparse
 import os
 import sys
 from copy import deepcopy
-from .migrate2scratch import migrate_image, remove_image
-from .migrate2scratch import read_json, get_img_info
+from .migrate2scratch import MigrateUtils
 import toml
 
 
@@ -179,15 +178,6 @@ def conf_env(conf, hpc):
     return new_env
 
 
-def check_image(conf, image):
-    """
-    Get image info from squash area
-    """
-
-    imgs = read_json(conf.squash_dir, "images")
-    return get_img_info(image, imgs)
-
-
 def get_params(args):
     """
     Try to extract the podman command and image name
@@ -222,10 +212,11 @@ def main():
     args, podman_args = parser.parse_known_args()
     comm, image = get_params(podman_args)
     conf = config(squash_dir=args.squash_dir)
+    mu = MigrateUtils(dst=conf.squash_dir)
 
     if len(podman_args) > 0 and podman_args[0].startswith("mig"):
         image = podman_args[1]
-        migrate_image(image, conf.squash_dir)
+        mu.migrate_image(image, conf.squash_dir)
         sys.exit()
 
     # Generate Configs
@@ -265,7 +256,7 @@ def main():
         else:
             sys.stderr.write("Pull failed\n")
     elif comm == "rmi":
-        remove_image(image, conf.squash_dir)
+        mu.remove_image(image, conf.squash_dir)
     else:
         os.execve(conf.podman_bin, podman_args, env)
 
