@@ -37,15 +37,6 @@ def setns(pid, ns):
         raise OSError(e, errno.errorcode[e])
 
 
-def mount(source, target, fs, options=''):
-    ret = _libc.mount(source.encode(), target.encode(),
-                      fs.encode(), 0, options.encode())
-    if ret < 0:
-        errno = ctypes.get_errno()
-        msg = f"Error mounting {source} ({fs}) on {target} " + \
-              f"with options '{options}': {os.strerror(errno)}"
-        raise OSError(errno, msg)
-
 
 def bind_mount(src, tgt):
     """
@@ -95,17 +86,6 @@ def do_plugin(rp, mod):
             bind_mount(src, tgt2)
 
 
-def makedev(rp, tgt, major, minor, chardev=True):
-    tgt2 = os.path.join(rp, tgt[1:])
-    mode = 0o600
-    if chardev:
-        mode |= stat.S_IFCHR
-    else:
-        mode |= stat.S_IFBLK
-    log("mknod %s %o" % (tgt2, mode))
-    os.mknod(tgt2, mode, os.makedev(major, minor))
-
-
 def main():
     global logger
 
@@ -136,9 +116,6 @@ def main():
         if plug_conf[m]['env'] in envs:
             log("Loading %s" % (m))
             do_plugin(rp, plug_conf[m])
-#    tgt = "%s/%s" % (rp, "motd")
-#    bind_mount("/etc/motd", tgt)
-#    makedev(rp, "/dev/nvidia0", 195, 0)
     ret = os.chroot(rp)
     log(ret)
 
