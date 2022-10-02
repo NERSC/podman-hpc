@@ -1,66 +1,95 @@
 from podman_hpc.migrate2scratch import MigrateUtils
 import os
 import json
+import pytest
+from tempfile import TemporaryDirectory
 
 
-def test_getpaths():
-    mu = MigrateUtils(dst = "/tmp/d")
-    assert mu.src is not None
+def get_count(fn, img):
+    images = json.load(open(fn))
+    ct = 0
+    for i in images:
+        for n in i['names']:
+            if n == img:
+                ct += 1
+    return ct
 
 
-def test_init_storage():
-    base = "/tmp/x"
-    mu = MigrateUtils(dst=base)
-    mu.init_storage()
-    idir = os.path.join(base, "overlay-images")
-    assert os.path.exists(idir)
-    mu.read_json_file(base, "images")
+class mockproc():
+    returncode = 0
+
+    def __init__(self, rcode=None):
+        if rcode:
+            self.returncode = rcode
+
+    def communicate(self):
+        return b"blah", b"blah"
 
 
-def test_bad_image_name():
-    base = "/tmp/x"
+@pytest.fixture
+def src():
     tdir = os.path.dirname(__file__)
-    sdir = os.path.join(tdir, "storage")
-    mu = MigrateUtils(src=sdir, dst=base)
-    mu.migrate_image("balpine")
+    return os.path.join(tdir, "storage")
 
 
-def test_migrate_remove():
-    base = "/tmp/x"
+@pytest.fixture
+def dst():
+    tempd = TemporaryDirectory(dir="/tmp")
+    return tempd.name
+
+
+def test_init_storage(src):
+    with TemporaryDirectory() as dst:
+        mu = MigrateUtils(src=src, dst=dst)
+        mu.dst.init_storage()
+        idir = os.path.join(dst, "overlay-images")
+        assert os.path.exists(idir)
+
+
+def test_bad_image_name(src):
+    with TemporaryDirectory() as dst:
+        mu = MigrateUtils(src=src, dst=dst)
+        mu.migrate_image("balpine")
+
+
+def test_migrate_remove(src, tmp_path, mocker):
     img = "docker.io/library/alpine:latest"
+    hash = "9c6f0724472873bb50a2ae67a9e7adcb57673a183cea8b06eb778dca859181b5"
     tdir = os.path.dirname(__file__)
-    sdir = os.path.join(tdir, "storage")
     bimg = json.load(open(os.path.join(tdir, "bogus_image.json")))
-    mu = MigrateUtils(src=sdir, dst=base)
-    mu.init_storage()
-    imgf = os.path.join(base, "overlay-images/images.json")
+
+    # Mock Popen
+    popen = mocker.patch("podman_hpc.migrate2scratch.Popen")
+    mu = MigrateUtils(src=src, dst=tmp_path)
+    mu.dst.init_storage()
+    imgf = os.path.join(tmp_path, "overlay-images/images.json")
     with open(imgf, "w") as f:
         json.dump([bimg], f)
-    mu.migrate_image(img)
+    mu.dst.refresh()
+
+    # Mock squash failing
+    popen.return_value = mockproc(rcode=1)
+    resp = mu.migrate_image(img)
+    assert resp is False
+
+    # Now a successful one
+    popen.return_value = mockproc()
+    resp = mu.migrate_image(img)
+    assert resp
+    assert get_count(mu.dst.images_json, img) == 1
+    popen.assert_called()
 
     # Remigrate to test check logic
-    mu.migrate_image(img)
+    resp = mu.migrate_image(img)
+    assert resp
+    assert get_count(mu.dst.images_json, img) == 1
 
-    # Remigrate to test check logic
-    mu.migrate_image("9c6f0724472873bb50a2ae67a9e7adcb57673a183cea8b06eb778dca859181b5")
+    # Remigrate with hash
+    resp = mu.migrate_image(hash)
+    assert resp
+    assert get_count(mu.dst.images_json, img) == 1
 
     # Test removing the image
-    mu.remove_image(img)
-#def get_img_info(img_name, images):
-#def read_json(base, otype):
-#def chk_image(dst, id):
-#def lock(base, ltype, id):
-#def _add_parent(layer, layers, by_id, layer_ids):
-#def list_img_layers(base, imgid, all_layers):
-#def del_rec(base, otype, id, key="id"):
-#def drop_tag(base, image, id):
-#def add_recs(base, otype, recs):
-#def copy_image_info(src, dst, img_id):
-#def copy_required_layers(srcd, dstd, req_layers):
-#def copy_overlay(srcd, dstd, img_id, layers):
-#def mksq(base, dst, img_id, ln):
-#def merge_recs(recs_list, key):
-#def read_link_file(base, img_id):
-#def migrate_image(image, dst):
-#def remove_image(image, dst):
-
+    resp = mu.remove_image(img)
+    assert resp
+    assert get_count(mu.dst.images_json, img) == 0
