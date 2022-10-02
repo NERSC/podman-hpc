@@ -252,7 +252,7 @@ def main():
         pid, status = os.wait()
         if status == 0:
             print("INFO: Migrating image to %s" % (conf.squash_dir))
-            migrate_image(image, conf.squash_dir)
+            mu.migrate_image(image, conf.squash_dir)
         else:
             sys.stderr.write("Pull failed\n")
     elif comm == "rmi":
