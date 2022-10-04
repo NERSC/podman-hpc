@@ -52,7 +52,7 @@ def test_conf(monkeypatch):
            }
     sys.stdin = io.StringIO(json.dumps(hconf))
     here = os.getcwd()
-    sys.argv[1] = conf
+    sys.argv = [sys.argv[0], conf]
     os.chdir(tempd.name)
 
     def mock_chroot(dir):

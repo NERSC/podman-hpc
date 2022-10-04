@@ -2,7 +2,7 @@
 import os
 import sys
 import json
-from shutil import copytree, copy
+from shutil import copytree, copy, which
 from subprocess import Popen, PIPE
 import logging
 
@@ -44,8 +44,9 @@ class ImageStore():
         self.layers_json = os.path.join(self.layers_dir, "layers.json")
         self.overlay_dir = os.path.join(base, "overlay")
         self.read_only = read_only
-        if os.path.exists(self.images_dir):
+        if os.path.exists(self.images_json):
             self.images = json.load(open(self.images_json))
+        if os.path.exists(self.layers_json):
             self.layers = json.load(open(self.layers_json))
 
     def refresh(self):
@@ -75,7 +76,7 @@ class ImageStore():
         for pref in prefs:
             long_name = f"{pref}{img_name}"
             for img in self.images:
-                for n in img["names"]:
+                for n in img.get("names", []):
                     if long_name == n:
                         return img, long_name
         return None, None
@@ -262,7 +263,7 @@ class MigrateUtils():
                     p = val.replace(" ", "").replace("\"", "")
         return p
 
-    def _get_img_layers(self, imgid):
+    def _get_img_layers(self, store, imgid):
         """
         This finds all the required layers for an image
         including layers coming from dependent images.
@@ -296,7 +297,7 @@ class MigrateUtils():
             if "diff-digest" in layer:
                 by_digest[layer["diff-digest"]] = layer
             by_id[layer["id"]] = layer
-        md = self.src.get_manifest(imgid)
+        md = store.get_manifest(imgid)
         layers = []
         layer_ids = set()
         for layer in md['layers']:
@@ -360,10 +361,9 @@ class MigrateUtils():
                 copy(src, dst)
 
     def _mksq(self, img_id, top_id):
-        ln = self.dst.read_link_file(top_id)
         # Get the link name
-        bin_dir = os.path.dirname(__file__)
-        _mksqstatic = os.path.join(bin_dir, "mksquashfs.static")
+        ln = self.dst.read_link_file(top_id)
+        _mksqstatic = which("mksquashfs.static")
         tgt = self.dst.get_squash_filename(ln)
         if os.path.exists(tgt):
             logging.info("Squash file already generated")
@@ -397,6 +397,8 @@ class MigrateUtils():
     def migrate_image(self, image):
         logging.debug(f"Migrating {image}")
         self.dst.init_storage()
+        self.src.refresh()
+        self.dst.refresh()
         # Read in json data
 
         img_info, fullname = self.src.get_img_info(image)
@@ -406,7 +408,7 @@ class MigrateUtils():
 
         img_id = img_info['id']
         # Get the layers from the manifest
-        rld = self._get_img_layers(img_id)
+        rld = self._get_img_layers(self.src, img_id)
 
         # make sure the src squash file exist
         top_id = rld[-1]['id']
@@ -446,14 +448,14 @@ class MigrateUtils():
 
     def remove_image(self, image):
         logging.debug(f"Removing {image}")
-        # self.dst.refresh()
+        self.dst.refresh()
         img_info, _ = self.dst.get_img_info(image)
         if not img_info:
             logging.error("Image {image} not found\n")
             return False
         img_id = img_info['id']
         # Get the layers from the manifest
-        rld = self._get_img_layers(img_id)
+        rld = self._get_img_layers(self.dst, img_id)
 
         # make sure the src squash file exist
         top_id = rld[-1]['id']

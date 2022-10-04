@@ -6,6 +6,7 @@ import sys
 from copy import deepcopy
 from .migrate2scratch import MigrateUtils
 import toml
+from shutil import which
 
 
 class config:
@@ -15,7 +16,6 @@ class config:
 
     def __init__(self, squash_dir=None):
         self.uid = os.getuid()
-        self.bin_dir = os.path.dirname(__file__)
         try:
             self.user = os.getlogin()
         except Exception:
@@ -27,12 +27,9 @@ class config:
         self.squash_dir = os.environ.get("SQUASH_DIR", squash_default)
         if squash_dir:
             self.squash_dir = squash_dir
-        home_def = self.bin_dir.replace("/bin", "")
-        self.podman_base = os.environ.get("PODMAN_HPC_HOME", home_def)
         self.podman_bin = which("podman")
-        self.hooks = os.path.join(self.podman_base, 'hooks.d')
-        self.mount_program = os.path.join(self.bin_dir, 'fuse-overlayfs-wrap')
-        self.conmon_bin = os.path.join(self.bin_dir, 'conmon')
+        self.mount_program = which('fuse-overlayfs-wrap')
+        self.conmon_bin = which('conmon')
         self.runtime = 'crun'
         self.options = []
 
@@ -57,7 +54,6 @@ class config:
 
     def get_default_containers_conf(self):
         return {'engine': {
-                    'hooks_dir': [self.hooks],
                     'conmon_path': [self.conmon_bin],
                   },
                 'containers': {
@@ -68,14 +64,6 @@ class config:
 
     def get_config_home(self):
         return "%s/config" % (self.xdg_base)
-
-
-def which(bin):
-    for p in os.environ["PATH"].split(":"):
-        fpath = os.path.join(p, bin)
-        if os.path.exists(fpath):
-            return fpath
-    return None
 
 
 def mpich(data):
@@ -174,7 +162,6 @@ def conf_env(conf, hpc):
         new_env["XDG_CONFIG_HOME"] = conf.get_config_home()
         if "XDG_RUNTIME_DIR" in new_env:
             new_env.pop("XDG_RUNTIME_DIR")
-    new_env["PATH"] = "%s/bin:%s" % (conf.podman_base, new_env["PATH"])
     return new_env
 
 
@@ -226,7 +213,6 @@ def main():
     if args.additional_stores or args.squash_dir or args.update_conf:
         overwrite = True
     _write_conf("storage.conf", stor_conf, conf, overwrite=overwrite)
-    _write_conf("containers.conf", cont_conf, conf)
 
     # Prepare podman exec
     env = conf_env(conf, True)
@@ -252,11 +238,11 @@ def main():
         pid, status = os.wait()
         if status == 0:
             print("INFO: Migrating image to %s" % (conf.squash_dir))
-            mu.migrate_image(image, conf.squash_dir)
+            mu.migrate_image(image)
         else:
             sys.stderr.write("Pull failed\n")
     elif comm == "rmi":
-        mu.remove_image(image, conf.squash_dir)
+        mu.remove_image(image)
     else:
         os.execve(conf.podman_bin, podman_args, env)
 
