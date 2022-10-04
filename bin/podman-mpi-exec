@@ -1,0 +1,34 @@
+#!/bin/bash
+
+# Launch the shared container
+# Only one will win on each node
+# $PODMAN_FLAGS should include all env vars, volume mounts, and workdir
+# $PODMAN_EXEC_FLAGS is only for env vars
+
+if [ -z $IMAGE ] ; then
+    echo "Set the IMAGE variable"
+    exit 1
+fi
+
+if [ $SLURM_LOCALID == 0 ] ; then
+     podman-hpc2.py rm --force hpc > /dev/null 2>/dev/null
+     podman-hpc2.py run --name hpc -d --rm --mpi --gpu $PODMAN_FLAGS --log-level fatal \
+           $IMAGE sleep infinity > /dev/null 2>&1
+     sleep 0.2
+else
+     sleep 0.5
+     while [ $(podman-hpc.py --log-level fatal ps -a|grep hpc|grep -c Up) -eq 0 ] ; do
+       sleep 0.2
+     done
+fi
+
+podman-hpc2.py exec \
+       -e "PALS_*" \
+       -e "PMI_*" \
+       -e "SLURM_*" \
+       --log-level fatal \
+       $PODMAN_EXEC_FLAGS \
+       hpc \
+       $@
+R=$?
+exit $R
