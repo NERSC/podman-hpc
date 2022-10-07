@@ -7,6 +7,11 @@ from copy import deepcopy
 from .migrate2scratch import MigrateUtils
 import toml
 from shutil import which
+from glob import glob
+import yaml
+
+
+_MOD_ENV = "PODMAN_MODULES_DIR"
 
 
 class config:
@@ -66,43 +71,43 @@ class config:
         return "%s/config" % (self.xdg_base)
 
 
-def mpich(data):
-    """
-    MPICH handler
-    """
-    cmd = []
-    lpath = "/opt/udiImage/modules/mpich:/opt/udiImage/modules/mpich/dep"
-    env_add = ["SLURM_*",
-               "PALS_*",
-               "PMI_*",
-               "LD_LIBRARY_PATH={}".format(lpath)
-               ]
-    if os.path.exists("/dev/xxxinfiniband"):
-        env_add.append("ENABLE_MPICH=1")
-    else:
-        env_add.append("ENABLE_MPICH_SS=1")
-    for en in env_add:
-        cmd.append("-e")
-        cmd.append(en)
-    cmd.append("--ipc=host")
-    cmd.append("--network=host")
-    cmd.append("--privileged")
-    cmd.append("--pid=host")
-    return data, cmd
+# def mpich(data):
+#     """
+#     MPICH handler
+#     """
+#     cmd = []
+#     lpath = "/opt/udiImage/modules/mpich:/opt/udiImage/modules/mpich/dep"
+#     env_add = ["SLURM_*",
+#                "PALS_*",
+#                "PMI_*",
+#                "LD_LIBRARY_PATH={}".format(lpath)
+#                ]
+#     if os.path.exists("/dev/xxxinfiniband"):
+#         env_add.append("ENABLE_MPICH=1")
+#     else:
+#         env_add.append("ENABLE_MPICH_SS=1")
+#     for en in env_add:
+#         cmd.append("-e")
+#         cmd.append(en)
+#     cmd.append("--ipc=host")
+#     cmd.append("--network=host")
+#     cmd.append("--privileged")
+#     cmd.append("--pid=host")
+#     return data, cmd
 
 
-def gpu(data):
-    """
-    GPU handler
-    """
-    if not os.path.exists("/dev/nvidia0"):
-        return data, []
-    if "CUDA_VISIBLE_DEVICES" not in os.environ:
-        sys.stderr.write("WARNING: CUDA_VISIBLE_DEVICES not set.\n")
-        sys.stderr.write("         GPU Support may not function\n\n")
-    cmd = ["-e", "NVIDIA_VISIBLE_DEVICES"]
-    cmd.extend(["-e", "ENABLE_GPU=1"])
-    return data, cmd
+# def gpu(data):
+#     """
+#     GPU handler
+#     """
+#     if not os.path.exists("/dev/nvidia0"):
+#         return data, []
+#     if "CUDA_VISIBLE_DEVICES" not in os.environ:
+#         sys.stderr.write("WARNING: CUDA_VISIBLE_DEVICES not set.\n")
+#         sys.stderr.write("         GPU Support may not function\n\n")
+#     cmd = ["-e", "NVIDIA_VISIBLE_DEVICES"]
+#     cmd.extend(["-e", "ENABLE_GPU=1"])
+#     return data, cmd
 
 
 def _write_conf(fn, data, conf, overwrite=False):
@@ -134,20 +139,26 @@ def config_storage(conf, additional_stores=None):
     return stor_conf
 
 
-def config_containers(conf, args):
+def config_containers(conf, args, confs):
     """
     Create a container conf object
     """
     cont_conf = conf.get_default_containers_conf()
     cmds = []
-    if args.gpu:
-        _, cmd = gpu(cont_conf)
-        conf.options.append("gpu")
-        cmds.extend(cmd)
-    if args.mpich:
-        _, cmd = mpich(cont_conf)
-        conf.options.append("mpi")
-        cmds.extend(cmd)
+    for mod, mconf in confs.items():
+        cli_arg = mconf['cli_arg']
+        if vars(args).get(cli_arg):
+            cmds.extend(mconf.get("additional_args", []))
+            cmds.extend(["-e", "%s=1" % (mconf['env'])])
+
+    # if args.gpu:
+    #     _, cmd = gpu(cont_conf)
+    #     conf.options.append("gpu")
+    #     cmds.extend(cmd)
+    # if args.mpi:
+    #     _, cmd = mpich(cont_conf)
+    #     conf.options.append("mpi")
+    #     cmds.extend(cmd)
     cont_conf["containers"]["seccomp_profile"] = "unconfined"
     return cont_conf, cmds
 
@@ -182,21 +193,35 @@ def get_params(args):
     return comm, image
 
 
+def read_confs():
+
+    mdir = os.environ.get(_MOD_ENV, "/etc/podman_hpc/modules.d")
+    confs = {}
+    for d in glob(f"{mdir}/*.yaml"):
+        conf = yaml.load(open(d), Loader=yaml.FullLoader)
+        confs[conf['name']] = conf
+    return confs
+
+
+def add_args(parser, confs):
+    for k, v in confs.items():
+        parser.add_argument("--%s" % (v["cli_arg"]), action="store_true",
+                            help=v.get("help"))
+
+
 def main():
     parser = argparse.ArgumentParser(prog='podman-hpc', add_help=False)
-    parser.add_argument("--gpu", action="store_true",
-                        help="Enable gpu support")
-    parser.add_argument("--mpich", action="store_true",
-                        help="Enable mpich support")
-    parser.add_argument("--hpc", action="store_true",
-                        help="Enable hpc support")
     parser.add_argument("--additional-stores", type=str,
                         help="Specify other storage locations")
     parser.add_argument("--squash-dir", type=str,
                         help="Specify alternate squash directory location")
     parser.add_argument("--update-conf", action="store_true",
                         help="Force update of storage conf")
+    confs = read_confs()
+    add_args(parser, confs)
     args, podman_args = parser.parse_known_args()
+    if "--help" in podman_args:
+        parser.print_help()
     comm, image = get_params(podman_args)
     conf = config(squash_dir=args.squash_dir)
     mu = MigrateUtils(dst=conf.squash_dir)
@@ -208,7 +233,7 @@ def main():
 
     # Generate Configs
     stor_conf = config_storage(conf, additional_stores=args.additional_stores)
-    cont_conf, cmds = config_containers(conf, args)
+    cont_conf, cmds = config_containers(conf, args, confs)
     overwrite = False
     if args.additional_stores or args.squash_dir or args.update_conf:
         overwrite = True

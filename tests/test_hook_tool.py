@@ -6,7 +6,6 @@ import json
 import ctypes
 import tempfile
 import time
-import pytest
 
 
 _libc = ctypes.CDLL(ctypes.util.find_library('c'), use_errno=True)
@@ -14,29 +13,30 @@ _libc = ctypes.CDLL(ctypes.util.find_library('c'), use_errno=True)
 
 def test_conf(monkeypatch):
     tdir = os.path.dirname(__file__)
-    conf = os.path.join(tdir, "test.yaml")
+    # conf = os.path.join(tdir, "test.yaml")
+    conf = os.path.join(tdir, "modules.d")
     tempd = tempfile.TemporaryDirectory(dir="/tmp")
     rdir = os.path.join(tempd.name, "root")
     os.mkdir(rdir)
     os.mkdir(os.path.join(rdir, "etc"))
-    env = [ "ENABLE_MODULE1=1" ]
+    env = ["ENABLE_MODULE1=1"]
     cconf = {
-             "root": {
-                      "path": rdir
-                     },
-             "process": { "env": env}
-            }
+        "root": {
+            "path": rdir
+            },
+        "process": {"env": env}
+    }
     with open(os.path.join(tempd.name, "config.json"), "w") as f:
-         json.dump(cconf, f)
+        json.dump(cconf, f)
     pid = os.fork()
     if pid == 0:
         uidmapfile = '/proc/self/uid_map'
         uidmap = "0 %d 1" % os.getuid()
-        resp = _libc.unshare(0x00020000|0x10000000|0x20000000)
+        _libc.unshare(0x00020000 | 0x10000000 | 0x20000000)
         print("Writing uidmap = '%s' to '%s'" % (uidmap, uidmapfile))
-        with open(uidmapfile,'w') as file:
+        with open(uidmapfile, 'w') as file:
             file.write(uidmap)
-        time.sleep(5)
+        time.sleep(4)
         os._exit(0)
     time.sleep(1)
 #    uidmapfile = '/proc/self/uid_map'
