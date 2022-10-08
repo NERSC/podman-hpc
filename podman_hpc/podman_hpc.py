@@ -3,6 +3,7 @@
 import argparse
 import os
 import sys
+import warnings
 from copy import deepcopy
 from .migrate2scratch import MigrateUtils
 import toml
@@ -33,6 +34,9 @@ class config:
         if squash_dir:
             self.squash_dir = squash_dir
         self.podman_bin = which("podman")
+        if self.podman_bin is None:
+            warnings.warn("No podman binary found in path! Please install podman.", stacklevel=2)
+            self.podman_bin="podman"
         self.mount_program = which('fuse-overlayfs-wrap')
         self.conmon_bin = which('conmon')
         self.runtime = 'crun'
