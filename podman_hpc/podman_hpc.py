@@ -18,7 +18,7 @@ class config:
         self.bin_dir = os.path.dirname(__file__)
         try:
             self.user = os.getlogin()
-        except Exception:
+        except OSError:
             self.user = os.environ["USER"]
         self.xdg_base = "/tmp/%d_hpc" % (self.uid)
         self.run_root = self.xdg_base
