@@ -213,6 +213,10 @@ def add_args(parser, confs):
                             help=v.get("help"))
 
 
+def shared_run_args(podman_args,container,image):
+    return "podman run", "podman exec"
+
+
 def main():
     parser = argparse.ArgumentParser(prog='podman-hpc', add_help=False)
     parser.add_argument("--additional-stores", type=str,
@@ -252,6 +256,18 @@ def main():
             ll_set = True
     if not ll_set:
         cmds.extend(["--log-level", "fatal"])
+
+    if comm == "shared-run":
+        localid = os.environ["SLURM_LOCALID"]
+        container_name = f"uid-{os.getuid}-pid-{os.getppid()}"
+        run_cmd, exec_args = shared_run_args(podman_args,container_name,image)
+
+        if localid == 0: # or race for it
+            os.system(run_cmd)
+        # wait for the named container to start (maybe convert this to python instead of bash)
+        os.system(f'while [ $(podman --log-level fatal ps -a | grep {container_name} | grep -c Up) -eq 0 ] ; do sleep 0.2')
+
+        os.execve(conf.podman_bin, exec_args, env)
 
     if comm == "run":
         start = podman_args.index("run") + 1
