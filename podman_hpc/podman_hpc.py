@@ -71,45 +71,6 @@ class config:
         return "%s/config" % (self.xdg_base)
 
 
-# def mpich(data):
-#     """
-#     MPICH handler
-#     """
-#     cmd = []
-#     lpath = "/opt/udiImage/modules/mpich:/opt/udiImage/modules/mpich/dep"
-#     env_add = ["SLURM_*",
-#                "PALS_*",
-#                "PMI_*",
-#                "LD_LIBRARY_PATH={}".format(lpath)
-#                ]
-#     if os.path.exists("/dev/xxxinfiniband"):
-#         env_add.append("ENABLE_MPICH=1")
-#     else:
-#         env_add.append("ENABLE_MPICH_SS=1")
-#     for en in env_add:
-#         cmd.append("-e")
-#         cmd.append(en)
-#     cmd.append("--ipc=host")
-#     cmd.append("--network=host")
-#     cmd.append("--privileged")
-#     cmd.append("--pid=host")
-#     return data, cmd
-
-
-# def gpu(data):
-#     """
-#     GPU handler
-#     """
-#     if not os.path.exists("/dev/nvidia0"):
-#         return data, []
-#     if "CUDA_VISIBLE_DEVICES" not in os.environ:
-#         sys.stderr.write("WARNING: CUDA_VISIBLE_DEVICES not set.\n")
-#         sys.stderr.write("         GPU Support may not function\n\n")
-#     cmd = ["-e", "NVIDIA_VISIBLE_DEVICES"]
-#     cmd.extend(["-e", "ENABLE_GPU=1"])
-#     return data, cmd
-
-
 def _write_conf(fn, data, conf, overwrite=False):
     """
     Write out a conf file
@@ -151,14 +112,6 @@ def config_containers(conf, args, confs):
             cmds.extend(mconf.get("additional_args", []))
             cmds.extend(["-e", "%s=1" % (mconf['env'])])
 
-    # if args.gpu:
-    #     _, cmd = gpu(cont_conf)
-    #     conf.options.append("gpu")
-    #     cmds.extend(cmd)
-    # if args.mpi:
-    #     _, cmd = mpich(cont_conf)
-    #     conf.options.append("mpi")
-    #     cmds.extend(cmd)
     cont_conf["containers"]["seccomp_profile"] = "unconfined"
     return cont_conf, cmds
 
