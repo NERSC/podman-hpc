@@ -4,12 +4,8 @@ import argparse
 import os
 import sys
 from copy import deepcopy
-from migrate2scratch import migrate_image, read_json, get_img_info, remove_image
-try:
-    import toml
-except ModuleNotFoundError:
-    sys.path.append('/global/common/shared/das/podman/python')
-    import toml
+from .migrate2scratch import MigrateUtils
+import toml
 
 
 class config:
@@ -22,7 +18,7 @@ class config:
         self.bin_dir = os.path.dirname(__file__)
         try:
             self.user = os.getlogin()
-        except:
+        except OSError:
             self.user = os.environ["USER"]
         self.xdg_base = "/tmp/%d_hpc" % (self.uid)
         self.run_root = self.xdg_base
@@ -68,7 +64,7 @@ class config:
                     'seccomp_profile': 'unconfined',
                     'runtime': self.runtime
                   }
-               }
+                }
 
     def get_config_home(self):
         return "%s/config" % (self.xdg_base)
@@ -121,20 +117,12 @@ def gpu(data):
     return data, cmd
 
 
-def _read_conf(fn):
-    """
-    Read a conf file
-    """
-    with open("%s/.config/containers/%s" % (os.environ["HOME"], fn)) as f:
-        data = toml.load(f)
-    return data
-
-
 def _write_conf(fn, data, conf, overwrite=False):
     """
     Write out a conf file
     """
-    os.makedirs("/tmp/containers-user-%d/containers" % (conf.uid), exist_ok=True)
+    cdir = "/tmp/containers-user-%d/containers" % (conf.uid)
+    os.makedirs(cdir, exist_ok=True)
     os.makedirs("%s/containers" % (conf.get_config_home()), exist_ok=True)
     fp = os.path.join(conf.get_config_home(), "containers", fn)
     if not os.path.exists(fp) or overwrite:
@@ -146,7 +134,6 @@ def config_storage(conf, additional_stores=None):
     """
     Create a storage conf object
     """
-    # stor_conf = _read_conf("storage.conf")
     stor_conf = conf.get_default_store_conf()
     opt = stor_conf["storage"]["options"]
     if "additionalimagestores" not in stor_conf["storage"]["options"]:
@@ -155,9 +142,7 @@ def config_storage(conf, additional_stores=None):
     if additional_stores:
         for loc in additional_stores.split(","):
             opt["additionalimagestores"].append(loc)
-            
-    #stor_conf["storage"]["runroot"] = conf.run_root
-    #stor_conf["storage"]["graphroot"] = conf.graph_root
+
     return stor_conf
 
 
@@ -165,9 +150,7 @@ def config_containers(conf, args):
     """
     Create a container conf object
     """
-    #cont_conf = _read_conf("containers.conf")
     cont_conf = conf.get_default_containers_conf()
-    options = []
     cmds = []
     if args.gpu:
         _, cmd = gpu(cont_conf)
@@ -195,15 +178,6 @@ def conf_env(conf, hpc):
     return new_env
 
 
-def check_image(conf, image):
-    """
-    Get image info from squash area
-    """
-
-    imgs = read_json(conf.squash_dir, "images")
-    return get_img_info(image, imgs)
-
-
 def get_params(args):
     """
     Try to extract the podman command and image name
@@ -221,7 +195,7 @@ def get_params(args):
     return comm, image
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(prog='podman-hpc', add_help=False)
     parser.add_argument("--gpu", action="store_true",
                         help="Enable gpu support")
@@ -238,10 +212,11 @@ if __name__ == "__main__":
     args, podman_args = parser.parse_known_args()
     comm, image = get_params(podman_args)
     conf = config(squash_dir=args.squash_dir)
+    mu = MigrateUtils(dst=conf.squash_dir)
 
     if len(podman_args) > 0 and podman_args[0].startswith("mig"):
         image = podman_args[1]
-        migrate_image(image, conf.squash_dir)
+        mu.migrate_image(image, conf.squash_dir)
         sys.exit()
 
     # Generate Configs
@@ -277,10 +252,14 @@ if __name__ == "__main__":
         pid, status = os.wait()
         if status == 0:
             print("INFO: Migrating image to %s" % (conf.squash_dir))
-            migrate_image(image, conf.squash_dir)
+            mu.migrate_image(image, conf.squash_dir)
         else:
             sys.stderr.write("Pull failed\n")
     elif comm == "rmi":
-        remove_image(image, conf.squash_dir) 
+        mu.remove_image(image, conf.squash_dir)
     else:
         os.execve(conf.podman_bin, podman_args, env)
+
+
+if __name__ == "__main__":
+    main()

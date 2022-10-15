@@ -12,12 +12,18 @@ from glob import glob
 from shutil import copyfile
 
 _libc = ctypes.CDLL(ctypes.util.find_library('c'), use_errno=True)
-_libc.mount.argtypes = (ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_ulong, ctypes.c_char_p)
+_libc.mount.argtypes = (ctypes.c_char_p,
+                        ctypes.c_char_p,
+                        ctypes.c_char_p,
+                        ctypes.c_ulong,
+                        ctypes.c_char_p)
 logger = None
+
 
 def log(msg):
     if logger:
         logger.write("%s\n" % (msg))
+
 
 def setns(pid, ns):
     """
@@ -30,11 +36,16 @@ def setns(pid, ns):
         e = ctypes.get_errno()
         raise OSError(e, errno.errorcode[e])
 
+
 def mount(source, target, fs, options=''):
-    ret = _libc.mount(source.encode(), target.encode(), fs.encode(), 0, options.encode())
+    ret = _libc.mount(source.encode(), target.encode(),
+                      fs.encode(), 0, options.encode())
     if ret < 0:
         errno = ctypes.get_errno()
-        raise OSError(errno, f"Error mounting {source} ({fs}) on {target} with options '{options}': {os.strerror(errno)}")
+        msg = f"Error mounting {source} ({fs}) on {target} " + \
+              f"with options '{options}': {os.strerror(errno)}"
+        raise OSError(errno, msg)
+
 
 def bind_mount(src, tgt):
     """
@@ -46,6 +57,7 @@ def bind_mount(src, tgt):
     elif not os.path.exists(tgt):
         open(tgt, "w").close()
     subprocess.check_output(["mount", "--bind", src, tgt])
+
 
 def ldconfig():
     if not os.path.exists("/sbin/ldconfig"):
@@ -82,6 +94,7 @@ def do_plugin(rp, mod):
             tgt2 = os.path.join(rp, tgt[1:])
             bind_mount(src, tgt2)
 
+
 def makedev(rp, tgt, major, minor, chardev=True):
     tgt2 = os.path.join(rp, tgt[1:])
     mode = 0o600
@@ -90,10 +103,12 @@ def makedev(rp, tgt, major, minor, chardev=True):
     else:
         mode |= stat.S_IFBLK
     log("mknod %s %o" % (tgt2, mode))
-    os.mknod(tgt2, mode, os.makedev(major, minor)) 
+    os.mknod(tgt2, mode, os.makedev(major, minor))
 
 
-if __name__ == "__main__":
+def main():
+    global logger
+
     plug_conf_fn = sys.argv[1]
 
     plug_conf = yaml.load(open(plug_conf_fn), Loader=yaml.FullLoader)
@@ -129,3 +144,6 @@ if __name__ == "__main__":
 
     ldconfig()
 
+
+if __name__ == "__main__":
+    main()
