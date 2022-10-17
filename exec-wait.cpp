@@ -44,7 +44,5 @@ int main(int argc, char * argv[] )
 
   if (debug) { std::cout << "done" << std::endl; }
 
-  std::cout << "Hello, World!" << std::endl;
-
   return 0;
 }
