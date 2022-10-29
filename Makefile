@@ -6,7 +6,7 @@ clean:
 	rm -rf dist build
 
 build:
-	g++ -static -o exec-wait exec-wait.cpp
+	g++ -std=c++17 -static -o exec-wait exec-wait.cpp
 
 install:
 	python3 -m setup install --root=$(DESTDIR) --prefix=/usr
