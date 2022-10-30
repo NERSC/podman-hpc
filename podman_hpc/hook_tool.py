@@ -7,7 +7,6 @@ import errno
 import subprocess
 import json
 import yaml
-import stat
 from glob import glob
 from shutil import copyfile
 
@@ -35,16 +34,6 @@ def setns(pid, ns):
     if _libc.setns(tgt.fileno(), 0) == -1:
         e = ctypes.get_errno()
         raise OSError(e, errno.errorcode[e])
-
-
-def mount(source, target, fs, options=''):
-    ret = _libc.mount(source.encode(), target.encode(),
-                      fs.encode(), 0, options.encode())
-    if ret < 0:
-        errno = ctypes.get_errno()
-        msg = f"Error mounting {source} ({fs}) on {target} " + \
-              f"with options '{options}': {os.strerror(errno)}"
-        raise OSError(errno, msg)
 
 
 def bind_mount(src, tgt):
@@ -95,23 +84,20 @@ def do_plugin(rp, mod):
             bind_mount(src, tgt2)
 
 
-def makedev(rp, tgt, major, minor, chardev=True):
-    tgt2 = os.path.join(rp, tgt[1:])
-    mode = 0o600
-    if chardev:
-        mode |= stat.S_IFCHR
-    else:
-        mode |= stat.S_IFBLK
-    log("mknod %s %o" % (tgt2, mode))
-    os.mknod(tgt2, mode, os.makedev(major, minor))
+def read_confs(mdir):
+    confs = {}
+    for d in glob(f"{mdir}/*.yaml"):
+        conf = yaml.load(open(d), Loader=yaml.FullLoader)
+        confs[conf['name']] = conf
+    return confs
 
 
 def main():
     global logger
 
     plug_conf_fn = sys.argv[1]
+    plug_conf = read_confs(plug_conf_fn)
 
-    plug_conf = yaml.load(open(plug_conf_fn), Loader=yaml.FullLoader)
     lf = os.environ.get("LOG_PLUGIN")
     if lf:
         logger = open(lf, "w")
@@ -130,15 +116,9 @@ def main():
         k, v = e.split("=", maxsplit=1)
         envs[k] = v
     for m in plug_conf:
-        if plug_conf[m]['annotation'] in inp['annotations']:
-            log("Loading %s" % (m))
-            do_plugin(rp, plug_conf[m])
         if plug_conf[m]['env'] in envs:
             log("Loading %s" % (m))
             do_plugin(rp, plug_conf[m])
-#    tgt = "%s/%s" % (rp, "motd")
-#    bind_mount("/etc/motd", tgt)
-#    makedev(rp, "/dev/nvidia0", 195, 0)
     ret = os.chroot(rp)
     log(ret)
 

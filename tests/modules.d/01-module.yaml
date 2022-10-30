@@ -1,0 +1,9 @@
+name: module1
+cli_arg: module1
+help: Example module1
+env: ENABLE_MODULE1
+copy:
+  - /etc/motd:/a/motd
+bind:
+  - /etc/hosts*:/etc
+  - /dev/null:/null

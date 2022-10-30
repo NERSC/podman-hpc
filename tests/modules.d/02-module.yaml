@@ -1,0 +1,8 @@
+name: module2
+cli_arg: module2
+annotation: module2
+env: ENABLE_MODULE2
+copy:
+  - /etc/motd:/motd2
+bind:
+  - /dev/null:/null2
