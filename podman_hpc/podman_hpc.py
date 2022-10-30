@@ -213,8 +213,27 @@ def add_args(parser, confs):
                             help=v.get("help"))
 
 
+def filter_podman_subcommand(podman_bin, subcommand, podman_args):
+    argflag = re.compile("^\s*(?:(-\w), )?(--\w[\w\-]+)")
+    with os.popen(' '.join([podman_bin,subcommand,'--help'])) as helpstream:
+        valid_flags = [flag for line in helpstream if argflag.match(line) for flag in argflag.match(line).groups() if flag]
+
+    arg = re.compile("(?<!\S)(?:-\w|--\w[\w\-]+)(?:\s+(?:[^-\'\"\s]\S+|\"[^\"]*\"|\'[^\']*\'))?")
+    return ' '.join([podman_bin,subcommand]+[a for a in arg.findall(' '.join(podman_args)) if a.split()[0] in valid_flags]).split()
+
+
 def shared_run_args(podman_args,container,image):
-    return "podman run", "podman exec"
+    print("calling shared_run_args with podman_args:")
+    print(f"\t{podman_args}")
+    
+    # generate valid subcommands from the given podman_args
+    prun =filter_podman_subcommand('podman','run',podman_args)
+    pexec=filter_podman_subcommand('podman','exec',podman_args)
+
+    print(f"podman run command:\n\t{prun}")
+    print(f"podman exec command:\n\t{pexec}")
+
+    return prun, pexec
 
 
 def main():
