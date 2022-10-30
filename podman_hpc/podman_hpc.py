@@ -33,6 +33,8 @@ class config:
         if squash_dir:
             self.squash_dir = squash_dir
         self.podman_bin = which("podman")
+        if not self.podman_bin:
+            raise OSError("Podman binary not found")
         self.mount_program = which('fuse-overlayfs-wrap')
         self.conmon_bin = which('conmon')
         self.runtime = 'crun'
@@ -181,7 +183,7 @@ def main():
 
     if len(podman_args) > 0 and podman_args[0].startswith("mig"):
         image = podman_args[1]
-        mu.migrate_image(image, conf.squash_dir)
+        mu.migrate_image(image)
         sys.exit()
 
     # Generate Configs

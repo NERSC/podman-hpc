@@ -9,9 +9,11 @@ image.
 
 ## Instructions
 
+This requires podman to be installed and logged into
+Docker Hub.
 
 ```
-docker build -t mksq .
-podman run -it --rm -v /tmp:/d  mksq cp /usr/local/bin/mksquashfs /d/mksquashfs.static
+podman login docker.io
+make rpm
 ```
 
