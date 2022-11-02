@@ -252,7 +252,7 @@ def shared_run_launch(localid,run_cmd,env):
         os.execve(run_cmd[0],run_cmd,env)
     return pid
 
-def main(cmd_str=None):
+def main():
     parser = argparse.ArgumentParser(prog='podman-hpc', add_help=False)
     parser.add_argument("--additional-stores", type=str,
                         help="Specify other storage locations")
@@ -262,7 +262,7 @@ def main(cmd_str=None):
                         help="Force update of storage conf")
     confs = read_confs()
     add_args(parser, confs)
-    args, podman_args = parser.parse_known_args(cmd_str.split() if cmd_str else None)
+    args, podman_args = parser.parse_known_args()
     print(f"known args (podman-hpc) are: {args}")
     print(f"unknown args (podman) are  : {podman_args}")
     if "--help" in podman_args:
