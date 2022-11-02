@@ -313,23 +313,23 @@ def main(cmd_str=None):
         start = podman_args.index("run") + 1
         for idx, item in enumerate(cmds):
             podman_args.insert(start + idx, item)
-        #os.execve(conf.podman_bin, podman_args, env)
+        os.execve(conf.podman_bin, podman_args, env)
         sys.exit()
     elif comm == "pull":
         # If pull, then pull and migrate
         pid = os.fork()
         if pid == 0:
-            pass #os.execve(conf.podman_bin, podman_args, os.environ)
+            os.execve(conf.podman_bin, podman_args, os.environ)
         pid, status = os.wait()
         if status == 0:
             print("INFO: Migrating image to %s" % (conf.squash_dir))
-            #mu.migrate_image(image)
+            mu.migrate_image(image)
         else:
             sys.stderr.write("Pull failed\n")
     elif comm == "rmi":
-        pass #mu.remove_image(image)
+        mu.remove_image(image)
     else:
-        pass #os.execve(conf.podman_bin, podman_args, env)
+        os.execve(conf.podman_bin, podman_args, env)
 
 
 if __name__ == "__main__":
