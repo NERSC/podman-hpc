@@ -233,8 +233,8 @@ def shared_run_args(podman_args,image,container_name='hpc'):
     prun =filter_podman_subcommand(podman_args[0],'run',podman_args)
     pexec=filter_podman_subcommand(podman_args[0],'exec',podman_args)
 
-    prun[2:2] = ['--rm','-d','--name',container_name]
-    prun.extend([image,'/path/to/exec-wait.o'])
+    prun[2:2] = ['--rm','-d','-v','/global/homes/d/dfulton/repos/podman-hpc/bin/exec-wait:/bin/exec-wait','--name',container_name]
+    prun.extend([image,'/bin/exec-wait'])
     pexec[2:2] = ['-e','"PALS_*"','-e','"PMI_*"','-e','"SLURM_*"','--log-level','fatal']
     pexec.extend([container_name])
     pexec.extend(podman_args[podman_args.index(image)+1:])
@@ -244,6 +244,13 @@ def shared_run_args(podman_args,image,container_name='hpc'):
 
     return prun, pexec
 
+def shared_run_launch(localid,run_cmd,env):
+    if localid and localid!=0:
+        return
+    pid = os.fork()
+    if pid==0:
+        os.execve(run_cmd[0],run_cmd,env)
+    return pid
 
 def main(cmd_str=None):
     parser = argparse.ArgumentParser(prog='podman-hpc', add_help=False)
@@ -290,15 +297,14 @@ def main(cmd_str=None):
         cmds.extend(["--log-level", "fatal"])
 
     if comm == "shared-run":
-        localid = 0#os.environ["SLURM_LOCALID"]
+        localid_var = os.environ.get("PODMAN_HPC_LOCALID_VAR","SLURM_LOCALID")
+        localid = os.environ.get(localid_var)
+
         container_name = f"uid-{os.getuid()}-pid-{os.getppid()}"
         run_cmd, exec_cmd = shared_run_args(podman_args,image,container_name)
 
-        if localid == 0: # or race for it
-            pid = os.fork()
-            if pid == 0:
-                pass
-                os.execve(run_cmd[0],run_cmd,os.environ)
+        shared_run_launch(localid,run_cmd,os.environ)
+
         # wait for the named container to start (maybe convert this to python instead of bash)
         os.system(f'while [ $(podman --log-level fatal ps -a | grep {container_name} | grep -c Up) -eq 0 ] ; do sleep 0.2')
         os.execve(exec_cmd[0], exec_cmd, os.environ)
