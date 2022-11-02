@@ -237,6 +237,7 @@ def shared_run_args(podman_args,image,container_name='hpc'):
     prun.extend([image,'/path/to/exec-wait.o'])
     pexec[2:2] = ['-e','"PALS_*"','-e','"PMI_*"','-e','"SLURM_*"','--log-level','fatal']
     pexec.extend([container_name])
+    pexec.extend(podman_args[podman_args.index(image)+1:])
 
     print(f"podman run command:\n\t{prun}")
     print(f"podman exec command:\n\t{pexec}")
@@ -289,13 +290,14 @@ def main(cmd_str=None):
         cmds.extend(["--log-level", "fatal"])
 
     if comm == "shared-run":
-        localid = os.environ["SLURM_LOCALID"]
+        localid = 0#os.environ["SLURM_LOCALID"]
         container_name = f"uid-{os.getuid()}-pid-{os.getppid()}"
         run_cmd, exec_cmd = shared_run_args(podman_args,image,container_name)
 
         if localid == 0: # or race for it
             pid = os.fork()
             if pid == 0:
+                pass
                 os.execve(run_cmd[0],run_cmd,os.environ)
         # wait for the named container to start (maybe convert this to python instead of bash)
         os.system(f'while [ $(podman --log-level fatal ps -a | grep {container_name} | grep -c Up) -eq 0 ] ; do sleep 0.2')
