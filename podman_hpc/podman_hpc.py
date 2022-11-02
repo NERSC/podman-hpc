@@ -3,6 +3,7 @@
 import argparse
 import os
 import sys
+import re
 import warnings
 from copy import deepcopy
 from .migrate2scratch import MigrateUtils
@@ -194,6 +195,8 @@ def get_params(args):
             image = arg
             break
         comm = arg
+    print(f"comm is: {comm}")
+    print(f"image is: {image}")
     return comm, image
 
 
@@ -222,13 +225,18 @@ def filter_podman_subcommand(podman_bin, subcommand, podman_args):
     return ' '.join([podman_bin,subcommand]+[a for a in arg.findall(' '.join(podman_args)) if a.split()[0] in valid_flags]).split()
 
 
-def shared_run_args(podman_args,container,image):
+def shared_run_args(podman_args,image,container_name='hpc'):
     print("calling shared_run_args with podman_args:")
     print(f"\t{podman_args}")
     
     # generate valid subcommands from the given podman_args
-    prun =filter_podman_subcommand('podman','run',podman_args)
-    pexec=filter_podman_subcommand('podman','exec',podman_args)
+    prun =filter_podman_subcommand(podman_args[0],'run',podman_args)
+    pexec=filter_podman_subcommand(podman_args[0],'exec',podman_args)
+
+    prun[2:2] = ['--rm','-d','--name',container_name]
+    prun.extend([image,'/path/to/exec-wait.o'])
+    pexec[2:2] = ['-e','"PALS_*"','-e','"PMI_*"','-e','"SLURM_*"','--log-level','fatal']
+    pexec.extend([container_name])
 
     print(f"podman run command:\n\t{prun}")
     print(f"podman exec command:\n\t{pexec}")
@@ -236,7 +244,7 @@ def shared_run_args(podman_args,container,image):
     return prun, pexec
 
 
-def main():
+def main(cmd_str=None):
     parser = argparse.ArgumentParser(prog='podman-hpc', add_help=False)
     parser.add_argument("--additional-stores", type=str,
                         help="Specify other storage locations")
@@ -246,7 +254,9 @@ def main():
                         help="Force update of storage conf")
     confs = read_confs()
     add_args(parser, confs)
-    args, podman_args = parser.parse_known_args()
+    args, podman_args = parser.parse_known_args(cmd_str.split() if cmd_str else None)
+    print(f"known args (podman-hpc) are: {args}")
+    print(f"unknown args (podman) are  : {podman_args}")
     if "--help" in podman_args:
         parser.print_help()
     comm, image = get_params(podman_args)
@@ -261,6 +271,7 @@ def main():
     # Generate Configs
     stor_conf = config_storage(conf, additional_stores=args.additional_stores)
     cont_conf, cmds = config_containers(conf, args, confs)
+
     overwrite = False
     if args.additional_stores or args.squash_dir or args.update_conf:
         overwrite = True
@@ -270,6 +281,7 @@ def main():
     env = conf_env(conf, True)
     podman_args.insert(0, conf.podman_bin)
     ll_set = False
+
     for arg in podman_args:
         if arg.startswith("--log-level"):
             ll_set = True
@@ -278,37 +290,38 @@ def main():
 
     if comm == "shared-run":
         localid = os.environ["SLURM_LOCALID"]
-        container_name = f"uid-{os.getuid}-pid-{os.getppid()}"
-        run_cmd, exec_args = shared_run_args(podman_args,container_name,image)
+        container_name = f"uid-{os.getuid()}-pid-{os.getppid()}"
+        run_cmd, exec_cmd = shared_run_args(podman_args,image,container_name)
 
         if localid == 0: # or race for it
-            os.system(run_cmd)
+            pid = os.fork()
+            if pid == 0:
+                os.execve(run_cmd[0],run_cmd,os.environ)
         # wait for the named container to start (maybe convert this to python instead of bash)
         os.system(f'while [ $(podman --log-level fatal ps -a | grep {container_name} | grep -c Up) -eq 0 ] ; do sleep 0.2')
-
-        os.execve(conf.podman_bin, exec_args, env)
+        os.execve(exec_cmd[0], exec_cmd, os.environ)
 
     if comm == "run":
         start = podman_args.index("run") + 1
         for idx, item in enumerate(cmds):
             podman_args.insert(start + idx, item)
-        os.execve(conf.podman_bin, podman_args, env)
+        #os.execve(conf.podman_bin, podman_args, env)
         sys.exit()
     elif comm == "pull":
         # If pull, then pull and migrate
         pid = os.fork()
         if pid == 0:
-            os.execve(conf.podman_bin, podman_args, os.environ)
+            pass #os.execve(conf.podman_bin, podman_args, os.environ)
         pid, status = os.wait()
         if status == 0:
             print("INFO: Migrating image to %s" % (conf.squash_dir))
-            mu.migrate_image(image)
+            #mu.migrate_image(image)
         else:
             sys.stderr.write("Pull failed\n")
     elif comm == "rmi":
-        mu.remove_image(image)
+        pass #mu.remove_image(image)
     else:
-        os.execve(conf.podman_bin, podman_args, env)
+        pass #os.execve(conf.podman_bin, podman_args, env)
 
 
 if __name__ == "__main__":
