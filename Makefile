@@ -6,12 +6,13 @@ clean:
 	rm -rf dist build
 
 build:
-	g++ -std=c++17 -static -o exec-wait exec-wait.cpp
+	g++ -std=c++17 -static -o bin/exec-wait exec-wait.cpp
 
-install:
+install: 
 	python3 -m setup install --root=$(DESTDIR) --prefix=/usr
 	install -d ./etc $(DOCDIR)/
 	install ./bin/fuse-overlayfs-wrap $(DESTDIR)/usr/bin/
+	install ./bin/exec-wait $(DESTDIR)/usr/bin/
 	mkdir -p $(DESTDIR)/etc/podman_hpc/
 	install ./etc/nersc-plug.yaml $(DESTDIR)/etc/podman_hpc/
 	install ./etc/01-gpu.conf $(DESTDIR)/etc/podman_hpc/
