@@ -217,15 +217,44 @@ def add_args(parser, confs):
 
 
 def filter_podman_subcommand(podman_bin, subcommand, podman_args):
-    argflag = re.compile("^\s*(?:(-\w), )?(--\w[\w\-]+)")
-    with os.popen(' '.join([podman_bin,subcommand,'--help'])) as helpstream:
-        valid_flags = [flag for line in helpstream if argflag.match(line) for flag in argflag.match(line).groups() if flag]
-
-    arg = re.compile("(?<!\S)(?:-\w|--\w[\w\-]+)(?:\s+(?:[^-\'\"\s]\S+|\"[^\"]*\"|\'[^\']*\'))?")
-    return ' '.join([podman_bin,subcommand]+[a for a in arg.findall(' '.join(podman_args)) if a.split()[0] in valid_flags]).split()
+    """ Filter invalid arguments from an argument list 
+    for a given podman subcommand based on its --help text. """
+    # extract valid flags from subcommand help text, and populate an arg parser
+    opt_regex = re.compile("^\s*(?:(-\w), )?(--\w[\w\-]+)(?:\s(\w+))?")
+    p = argparse.ArgumentParser(exit_on_error=False)
+    with os.popen(' '.join([podman_bin,subcommand,'--help'])) as f:
+        for line in f:
+            opt = opt_regex.match(line)
+            if opt:
+                action = 'store' if opt.groups()[2] else 'store_true'
+                flags = [flag for flag in opt.groups()[:-1] if flag]
+                p.add_argument(*flags,action=action)
+    # remove unknown args from the podman_args
+    subcmd_args = podman_args.copy()
+    unknowns = p.parse_known_args(subcmd_args)[1]
+    uk_safe={} # indices of valid args that string== unknowns
+    while unknowns:
+        ukd={} # candidate indices of where to remove unknowns
+        for uk in set(unknowns):
+            ukd[uk]=[idx for idx,arg in enumerate(subcmd_args) if (arg==uk and idx not in uk_safe.get(uk,[]))]
+        uk=unknowns.pop(0) 
+        # find and remove an invalid occurence of uk
+        while True:
+            args_tmp = subcmd_args.copy()
+            args_tmp.pop(ukd[uk][0])
+            try:
+                if p.parse_known_args(args_tmp)[1]==unknowns:
+                    subcmd_args.pop(ukd[uk][0])
+                    break
+            except argparse.ArgumentError:
+                pass
+            uk_safe.setdefault(uk,[]).append(ukd[uk].pop(0))
+    return [podman_bin,subcommand]+subcmd_args
 
 
 def shared_run_args(podman_args,image,container_name='hpc'):
+    """ Construct argument list for `podman run` and `podman exec`
+    by filtering flags passed to `podman shared-run` """
     print("calling shared_run_args with podman_args:")
     print(f"\t{podman_args}")
     
@@ -245,6 +274,7 @@ def shared_run_args(podman_args,image,container_name='hpc'):
     return prun, pexec
 
 def shared_run_launch(localid,run_cmd,env):
+    """ helper to break out of an if block """
     if localid and localid!=0:
         return
     pid = os.fork()
