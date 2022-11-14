@@ -23,7 +23,7 @@ class config:
         self.uid = os.getuid()
         try:
             self.user = os.getlogin()
-        except Exception:
+        except OSError:
             self.user = os.environ["USER"]
         self.xdg_base = "/tmp/%d_hpc" % (self.uid)
         self.run_root = self.xdg_base
