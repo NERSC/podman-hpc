@@ -1,0 +1,26 @@
+#!/bin/bash
+
+LOG=/tmp/fow-$(id -u).log
+LOG=/dev/null
+if [ "$1" = "wait" ] ; then
+    inotifywait -e delete $2/etc
+    umount $3
+    exit
+fi
+
+F=$(echo $@|sed 's/,upperdir.*//'|sed 's/.*lowerdir=//')
+echo "In fow $F.squash" >> $LOG
+if [ -e "${F}.squash" ] ; then
+	echo "Mount suash $F" >> $LOG
+	/usr/bin/squashfuse $F.squash $F >> $LOG 2>&1
+fi
+
+#echo "Doing fuse mount" >> $LOG
+/usr/bin/fuse-overlayfs $@
+
+# Start a process to watch the mount and unmount squash
+# if possible
+if [ -e "${F}.squash" ] ; then
+	D=$(echo $@|sed 's/.* //')
+	$0 wait $D $F  0<&- &>/dev/null &
+fi

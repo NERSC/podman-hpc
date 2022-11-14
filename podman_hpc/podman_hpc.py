@@ -4,7 +4,6 @@ import argparse
 import os
 import sys
 import re
-import warnings
 from copy import deepcopy
 from .migrate2scratch import MigrateUtils
 import toml
@@ -25,7 +24,7 @@ class config:
         self.uid = os.getuid()
         try:
             self.user = os.getlogin()
-        except Exception:
+        except OSError:
             self.user = os.environ["USER"]
         self.xdg_base = "/tmp/%d_hpc" % (self.uid)
         self.run_root = self.xdg_base
@@ -36,8 +35,7 @@ class config:
             self.squash_dir = squash_dir
         self.podman_bin = which("podman")
         if self.podman_bin is None:
-            warnings.warn("No podman binary found in path! Please install podman.", stacklevel=2)
-            self.podman_bin="podman"
+            raise OSError("No podman binary found in PATH.")
         self.mount_program = which('fuse-overlayfs-wrap')
         self.conmon_bin = which('conmon')
         self.runtime = 'crun'
@@ -74,45 +72,6 @@ class config:
 
     def get_config_home(self):
         return "%s/config" % (self.xdg_base)
-
-
-# def mpich(data):
-#     """
-#     MPICH handler
-#     """
-#     cmd = []
-#     lpath = "/opt/udiImage/modules/mpich:/opt/udiImage/modules/mpich/dep"
-#     env_add = ["SLURM_*",
-#                "PALS_*",
-#                "PMI_*",
-#                "LD_LIBRARY_PATH={}".format(lpath)
-#                ]
-#     if os.path.exists("/dev/xxxinfiniband"):
-#         env_add.append("ENABLE_MPICH=1")
-#     else:
-#         env_add.append("ENABLE_MPICH_SS=1")
-#     for en in env_add:
-#         cmd.append("-e")
-#         cmd.append(en)
-#     cmd.append("--ipc=host")
-#     cmd.append("--network=host")
-#     cmd.append("--privileged")
-#     cmd.append("--pid=host")
-#     return data, cmd
-
-
-# def gpu(data):
-#     """
-#     GPU handler
-#     """
-#     if not os.path.exists("/dev/nvidia0"):
-#         return data, []
-#     if "CUDA_VISIBLE_DEVICES" not in os.environ:
-#         sys.stderr.write("WARNING: CUDA_VISIBLE_DEVICES not set.\n")
-#         sys.stderr.write("         GPU Support may not function\n\n")
-#     cmd = ["-e", "NVIDIA_VISIBLE_DEVICES"]
-#     cmd.extend(["-e", "ENABLE_GPU=1"])
-#     return data, cmd
 
 
 def _write_conf(fn, data, conf, overwrite=False):
@@ -156,14 +115,6 @@ def config_containers(conf, args, confs):
             cmds.extend(mconf.get("additional_args", []))
             cmds.extend(["-e", "%s=1" % (mconf['env'])])
 
-    # if args.gpu:
-    #     _, cmd = gpu(cont_conf)
-    #     conf.options.append("gpu")
-    #     cmds.extend(cmd)
-    # if args.mpi:
-    #     _, cmd = mpich(cont_conf)
-    #     conf.options.append("mpi")
-    #     cmds.extend(cmd)
     cont_conf["containers"]["seccomp_profile"] = "unconfined"
     return cont_conf, cmds
 
@@ -195,8 +146,6 @@ def get_params(args):
             image = arg
             break
         comm = arg
-    print(f"comm is: {comm}")
-    print(f"image is: {image}")
     return comm, image
 
 
@@ -293,8 +242,6 @@ def main():
     confs = read_confs()
     add_args(parser, confs)
     args, podman_args = parser.parse_known_args()
-    print(f"known args (podman-hpc) are: {args}")
-    print(f"unknown args (podman) are  : {podman_args}")
     if "--help" in podman_args:
         parser.print_help()
     comm, image = get_params(podman_args)
@@ -303,13 +250,12 @@ def main():
 
     if len(podman_args) > 0 and podman_args[0].startswith("mig"):
         image = podman_args[1]
-        mu.migrate_image(image, conf.squash_dir)
+        mu.migrate_image(image)
         sys.exit()
 
     # Generate Configs
     stor_conf = config_storage(conf, additional_stores=args.additional_stores)
     cont_conf, cmds = config_containers(conf, args, confs)
-
     overwrite = False
     if args.additional_stores or args.squash_dir or args.update_conf:
         overwrite = True
@@ -319,7 +265,6 @@ def main():
     env = conf_env(conf, True)
     podman_args.insert(0, conf.podman_bin)
     ll_set = False
-
     for arg in podman_args:
         if arg.startswith("--log-level"):
             ll_set = True
