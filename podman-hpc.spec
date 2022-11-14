@@ -46,7 +46,7 @@ run fully unprivileged.
 %files
 %license LICENSE
 %doc CHANGELOG.md README.md
-%config /etc/podman_hpc/nersc-plug.yaml
+%config /etc/podman_hpc/modules.d
 %config /etc/podman_hpc/01-gpu.conf
 %config /etc/podman_hpc/02-mpich.conf
 /usr/bin/podman-hpc
