@@ -211,7 +211,7 @@ def shared_run_args(podman_args,image,container_name='hpc'):
     prun =filter_podman_subcommand(podman_args[0],'run',podman_args)
     pexec=filter_podman_subcommand(podman_args[0],'exec',podman_args)
 
-    prun[2:2] = ['--rm','-d','-v','/global/homes/d/dfulton/repos/podman-hpc/bin/exec-wait:/bin/exec-wait','--name',container_name]
+    prun[2:2] = ['--rm','-d','--exec-wait','--name',container_name]
     prun.extend([image,'/bin/exec-wait'])
     pexec[2:2] = ['-e','"PALS_*"','-e','"PMI_*"','-e','"SLURM_*"','--log-level','fatal']
     pexec.extend([container_name])
