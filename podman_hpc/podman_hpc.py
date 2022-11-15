@@ -3,6 +3,7 @@
 import argparse
 import os
 import sys
+import re
 from copy import deepcopy
 from .migrate2scratch import MigrateUtils
 import toml
@@ -33,8 +34,8 @@ class config:
         if squash_dir:
             self.squash_dir = squash_dir
         self.podman_bin = which("podman")
-        if not self.podman_bin:
-            raise OSError("Podman binary not found")
+        if self.podman_bin is None:
+            raise OSError("No podman binary found in PATH.")
         self.mount_program = which('fuse-overlayfs-wrap')
         self.conmon_bin = which('conmon')
         self.runtime = 'crun'
@@ -164,6 +165,72 @@ def add_args(parser, confs):
                             help=v.get("help"))
 
 
+def filter_podman_subcommand(podman_bin, subcommand, podman_args):
+    """ Filter invalid arguments from an argument list 
+    for a given podman subcommand based on its --help text. """
+    # extract valid flags from subcommand help text, and populate an arg parser
+    opt_regex = re.compile("^\s*(?:(-\w), )?(--\w[\w\-]+)(?:\s(\w+))?")
+    p = argparse.ArgumentParser(exit_on_error=False)
+    with os.popen(' '.join([podman_bin,subcommand,'--help'])) as f:
+        for line in f:
+            opt = opt_regex.match(line)
+            if opt:
+                action = 'store' if opt.groups()[2] else 'store_true'
+                flags = [flag for flag in opt.groups()[:-1] if flag]
+                p.add_argument(*flags,action=action)
+    # remove unknown args from the podman_args
+    subcmd_args = podman_args.copy()
+    unknowns = p.parse_known_args(subcmd_args)[1]
+    uk_safe={} # indices of valid args that string== unknowns
+    while unknowns:
+        ukd={} # candidate indices of where to remove unknowns
+        for uk in set(unknowns):
+            ukd[uk]=[idx for idx,arg in enumerate(subcmd_args) if (arg==uk and idx not in uk_safe.get(uk,[]))]
+        uk=unknowns.pop(0) 
+        # find and remove an invalid occurence of uk
+        while True:
+            args_tmp = subcmd_args.copy()
+            args_tmp.pop(ukd[uk][0])
+            try:
+                if p.parse_known_args(args_tmp)[1]==unknowns:
+                    subcmd_args.pop(ukd[uk][0])
+                    break
+            except argparse.ArgumentError:
+                pass
+            uk_safe.setdefault(uk,[]).append(ukd[uk].pop(0))
+    return [podman_bin,subcommand]+subcmd_args
+
+
+def shared_run_args(podman_args,image,container_name='hpc'):
+    """ Construct argument list for `podman run` and `podman exec`
+    by filtering flags passed to `podman shared-run` """
+    print("calling shared_run_args with podman_args:")
+    print(f"\t{podman_args}")
+    
+    # generate valid subcommands from the given podman_args
+    prun =filter_podman_subcommand(podman_args[0],'run',podman_args)
+    pexec=filter_podman_subcommand(podman_args[0],'exec',podman_args)
+
+    prun[2:2] = ['--rm','-d','--exec-wait','--name',container_name]
+    prun.extend([image,'/bin/exec-wait'])
+    pexec[2:2] = ['-e','"PALS_*"','-e','"PMI_*"','-e','"SLURM_*"','--log-level','fatal']
+    pexec.extend([container_name])
+    pexec.extend(podman_args[podman_args.index(image)+1:])
+
+    print(f"podman run command:\n\t{prun}")
+    print(f"podman exec command:\n\t{pexec}")
+
+    return prun, pexec
+
+def shared_run_launch(localid,run_cmd,env):
+    """ helper to break out of an if block """
+    if localid and localid!=0:
+        return
+    pid = os.fork()
+    if pid==0:
+        os.execve(run_cmd[0],run_cmd,env)
+    return pid
+
 def main():
     parser = argparse.ArgumentParser(prog='podman-hpc', add_help=False)
     parser.add_argument("--additional-stores", type=str,
@@ -203,6 +270,19 @@ def main():
             ll_set = True
     if not ll_set:
         cmds.extend(["--log-level", "fatal"])
+
+    if comm == "shared-run":
+        localid_var = os.environ.get("PODMAN_HPC_LOCALID_VAR","SLURM_LOCALID")
+        localid = os.environ.get(localid_var)
+
+        container_name = f"uid-{os.getuid()}-pid-{os.getppid()}"
+        run_cmd, exec_cmd = shared_run_args(podman_args,image,container_name)
+
+        shared_run_launch(localid,run_cmd,os.environ)
+
+        # wait for the named container to start (maybe convert this to python instead of bash)
+        os.system(f'while [ $(podman --log-level fatal ps -a | grep {container_name} | grep -c Up) -eq 0 ] ; do sleep 0.2')
+        os.execve(exec_cmd[0], exec_cmd, os.environ)
 
     if comm == "run":
         start = podman_args.index("run") + 1
