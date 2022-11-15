@@ -179,7 +179,8 @@ def call_podman(ctx,siteconf,podman_args):
     #print(f"os.execve(\n\t{cmd[0]},\n\t{cmd},\n\tsiteconf.env\n)")
     os.execve(cmd[0],cmd,siteconf.env)
     
-
+def main():
+    podhpc()
 
 if __name__ == "__main__":
-    podhpc()
+    main()
