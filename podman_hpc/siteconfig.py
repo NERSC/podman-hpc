@@ -116,22 +116,26 @@ class SiteConfig:
     def export_containers_conf(self,filename="container.conf", overwrite=False):
         self._write_conf(filename,self.container_conf,overwrite=overwrite)
 
-    def get_cmd_extensions(self,args):
+    def get_cmd_extensions(self,subcommand,args):
         cmds = []
-        for mod, mconf in self.sitemods.items():
+        for mod, mconf in self.sitemods.get(subcommand,{}).items():
             cli_arg = mconf['cli_arg']
-            if args.get(cli_arg):
+            if args.get(cli_arg,False):
                 cmds.extend(mconf.get("additional_args", []))
                 cmds.extend(["-e", f"{mconf['env']}=1"])
         if self.log_level:
             cmds.extend(["--log-level", self.log_level])
         return cmds
         
-
+    # TODO - This manually indicates that site modules apply to podman
+    # subcommand `run`, however we should bake this into yamls themselves
+    # and then edit podman_hpc.siteconfig.SiteConfig.read_site_modules()
+    # to parse appropriately.  This would allow adding site-specific default
+    # flags for any podman subcommand.
     def read_site_modules(self):
         mdir = os.environ.get(_MOD_ENV, "/etc/podman_hpc/modules.d")
         mods = {}
         for modfile in glob(f"{mdir}/*.yaml"):
             mod = yaml.load(open(modfile), Loader=yaml.FullLoader)
             mods[mod['name']] = mod
-        self.sitemods = mods
+        self.sitemods = {'run':mods}

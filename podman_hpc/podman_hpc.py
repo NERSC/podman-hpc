@@ -7,13 +7,36 @@ from . import click_passthrough as cpt
 from .migrate2scratch import MigrateUtils
 from .siteconfig import SiteConfig
         
-        
-# decorator so that subcommands receive SiteConfig object as first arg
+
+# function to specify help message formatting to mimic the podman help page.
+# follows the style of click.Command.format_help()
+# this will be inherited by subcommands created with @podhpc.command()
+def podman_format(self, ctx, formatter):
+    self.format_short_help(ctx,formatter)
+    self.format_description(ctx,formatter)
+    formatter.write_paragraph()
+    self.format_usage(ctx, formatter)
+    self.format_options(ctx, formatter)
+    if self.epilog:
+        with formatter.section("Podman help page follows"):
+            self.format_epilog(ctx,formatter)    
+
+            
+# parse the `podman --help` page so it can be added as a custom epilog to main command help
+with os.popen('podman --help') as fid:
+    try:
+        text = re.sub("^.+(?=(Available Commands))","\b\n",fid.read(),flags=re.DOTALL)
+        podman_epilog = re.sub("(\n\s*\n)(?=\S)","\n\n\b\n",text)
+    except:
+        podman_epilog = "For additional commands please see `podman --help`."
+            
+            
+# decorator so that subcommands can request to receive SiteConfig object
 pass_siteconf = click.make_pass_decorator(SiteConfig, ensure=True)
 
 
 ### podman-hpc command #######################################################
-@click.group(cls=cpt.PassthroughGroup,passthrough='podman')
+@click.group(cls=cpt.PassthroughGroup,custom_format=podman_format,epilog=podman_epilog,passthrough='podman')
 @click.pass_context
 @click.option("--additional-stores", type=str,
                     help="Specify other storage locations")
@@ -43,40 +66,18 @@ def podhpc(ctx,additional_stores,squash_dir,update_conf,log_level):
     overwrite = additional_stores or squash_dir or update_conf
     conf.export_storage_conf(overwrite=overwrite)
     
-    # dynamically add option flags to 'run' subcommand
-    scmd = ctx.command.commands.get('run',None)
-    if scmd:
-        for k,v in conf.sitemods.items():
-            scmd = click.option(f"--{v['cli_arg']}", 
-                                is_flag=True, 
-                                help=v.get("help"))(scmd)
+    # add appropriate flags to call_podman based on invoked subcommand
+    defcmd = ctx.command.default_command_fn
+    for k,v in conf.sitemods.get(ctx.invoked_subcommand,{}).items():
+        defcmd = click.option(f"--{v['cli_arg']}",
+                                   is_flag=True,
+                                   hidden=v.get('hidden',False),
+                                   help=v.get("help"))(defcmd)
             
     # save the site config to a context object so it can be passed to subcommands
     ctx.obj = conf
 
-# parse the `podman --help` page and add it as a custom epilog to main command help
-with os.popen('podman --help') as fid:
-    try:
-        text = re.sub("^.+(?=(Available Commands))","\b\n",fid.read(),flags=re.DOTALL)
-        podhpc.epilog = re.sub("(\n\s*\n)(?=\S)","\n\n\b\n",text)
-    except:
-        podhpc.epilog = "For additional commands please see `podman --help`."
-
-# function in the style of click.Command.format_help() to mimic podman help page.
-# this will be inherited by subcommands created with @podhpc.command()
-def podman_format(self, ctx, formatter):
-    self.format_short_help(ctx,formatter)
-    self.format_description(ctx,formatter)
-    formatter.write_paragraph()
-    self.format_usage(ctx, formatter)
-    self.format_options(ctx, formatter)
-    if self.epilog:
-        with formatter.section("Podman help page follows"):
-            self.format_epilog(ctx,formatter)
-
-podhpc.custom_format=podman_format
-
-
+    
 ### podman-hpc migrate subcommand ############################################
 @podhpc.command()
 @pass_siteconf
@@ -84,7 +85,7 @@ podhpc.custom_format=podman_format
 def migrate(siteconf,image):
     """Migrate an image to squashed."""
     mu = MigrateUtils(dst=siteconf.squash_dir)
-    mu.migrate_image(image, siteconf.squash_dir)
+    mu.migrate_image(image)
     sys.exit()
 
     
@@ -95,35 +96,27 @@ def rmsqi(image):
     """Removes a squashed image. """
     mu.remove_image(image)
 
-    
-### podman-hpc run subcommand (modified) #####################################
-@podhpc.command(context_settings=dict(ignore_unknown_options=True,))
-@pass_siteconf
-@click.argument('run_args', nargs=-1, type=click.UNPROCESSED)
-def run(siteconf,run_args=None,**site_opts):
-    """ This is a description of podman-hpc run. """
-    cmd = [siteconf.podman_bin, 'run']
-    cmd.extend(siteconf.get_cmd_extensions(site_opts))
-    cmd.extend(run_args)
-    #print(f"os.execve(\n\t{cmd[0]},\n\t{cmd},\n\tsiteconf.env\n)")
-    os.execve(cmd[0],cmd,siteconf.env)
-    sys.exit()
-
         
 ### podman-hpc pull subcommand (modified) ####################################
-@podhpc.command()
-def pull(podman_bin,podman_args):
+@podhpc.command(context_settings=dict(ignore_unknown_options=True,))
+@pass_siteconf
+@click.pass_context
+@click.argument('podman_args', nargs=-1, type=click.UNPROCESSED)
+@click.argument('image')
+def pull(ctx,siteconf,image,podman_args):
     """ Pulls an image to a local repository and makes a squashed copy. """
     pid = os.fork()
     if pid == 0:
-        #conf.podman_bin or podman_bin?
-        os.execve(podman_bin, podman_args, os.environ)
+        cmd = [siteconf.podman_bin, 'pull']
+        cmd.extend(podman_args)
+        cmd.append(image)
+        os.execve(cmd[0], cmd, os.environ)
     pid, status = os.wait()
     if status == 0:
-        click.echo(f"INFO: Migrating image to {confc.squash_dir}")
-        mu.migrate_image(image)
+        click.echo(f"INFO: Migrating image to {siteconf.squash_dir}")
+        ctx.invoke(migrate,image=image)
     else:
-        sys.stderr.write("Pull failed\n")
+        sys.stderr.write("Pull failed.\n")
 
     
 ### podman-hpc shared-run subcommand #########################################
@@ -162,10 +155,14 @@ def shared_run_launch(localid,run_cmd,env):
 @pass_siteconf
 @click.pass_context
 @click.argument('podman_args', nargs=-1, type=click.UNPROCESSED)
-def call_podman(ctx,siteconf,podman_args):
+def call_podman(ctx,siteconf,podman_args,**site_opts):
     cmd = [siteconf.podman_bin, ctx.info_name]
+    cmd.extend(siteconf.get_cmd_extensions(ctx.info_name,site_opts))
     cmd.extend(podman_args)
 
+    os.execve(cmd[0],cmd,siteconf.env)
+
+    ### exerimental, this doesn't run because of ^^^ execve
     # stream editor to replace instances of 'podman' with 'podman-hpc'
     cmd_sed = ['/usr/bin/sed',f's/{os.path.basename(cmd[0])}/{ctx.find_root().command_path}/']
 
