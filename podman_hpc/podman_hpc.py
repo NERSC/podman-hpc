@@ -91,9 +91,11 @@ def migrate(siteconf,image):
     
 ### podman-hpc rmsqi subcommand ##############################################
 @podhpc.command()
+@pass_siteconf
 @click.argument('image',type=str)
-def rmsqi(image):
+def rmsqi(siteconf,image):
     """Removes a squashed image. """
+    mu = MigrateUtils(dst=siteconf.squash_dir)
     mu.remove_image(image)
 
         
