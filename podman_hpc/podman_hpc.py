@@ -79,19 +79,12 @@ podhpc.custom_format=podman_format
 
 ### podman-hpc migrate subcommand ############################################
 @podhpc.command()
+@pass_siteconf
 @click.argument('image',type=str)
-@click.option("-p","--path",metavar="PATH",
-              default=lambda: os.environ.get("SQUASH_DIR",""),
-             help="Path to which the image will be squashed.")
-def migrate(image,path):
+def migrate(siteconf,image):
     """Migrate an image to squashed."""
-    click.echo("  will execute the following command:")
-    click.echo(f"  migrate2squash.py mig {image} {path}")
-    click.echo(" ")
-  
-    #conf.squash_dir or path? pull in the correct defaults
-    mu = MigrateUtils(dst=path)
-    mu.migrate_image(image, pathcl)
+    mu = MigrateUtils(dst=siteconf.squash_dir)
+    mu.migrate_image(image, siteconf.squash_dir)
     sys.exit()
 
     
