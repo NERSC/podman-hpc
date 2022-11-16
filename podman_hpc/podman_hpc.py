@@ -156,22 +156,34 @@ def shared_run_launch(localid,run_cmd,env):
         os.execve(run_cmd[0],run_cmd,env)
     return pid
 
-    
+
 ### podman-hpc call_podman subcommand (default, hidden, passthrough) #########
 @podhpc.default_command(context_settings=dict(ignore_unknown_options=True,help_option_names=[]),hidden=True)
 @pass_siteconf
 @click.pass_context
 @click.argument('podman_args', nargs=-1, type=click.UNPROCESSED)
 def call_podman(ctx,siteconf,podman_args):
-    cmd = [siteconf.podman_bin]    
-    try:
-        cmd.append(ctx.parent.invoked_subcommand)
-    except:
-        pass
+    cmd = [siteconf.podman_bin, ctx.info_name]
     cmd.extend(podman_args)
-    #print(f"os.execve(\n\t{cmd[0]},\n\t{cmd},\n\tsiteconf.env\n)")
-    os.execve(cmd[0],cmd,siteconf.env)
-    
+
+    # stream editor to replace instances of 'podman' with 'podman-hpc'
+    cmd_sed = ['/usr/bin/sed',f's/{os.path.basename(cmd[0])}/{ctx.find_root().command_path}/']
+
+    STDIN = 0
+    STDOUT = 1
+    p_read, p_write = os.pipe()
+    if os.fork():
+        os.close(p_write)
+        os.dup2(p_read, STDIN)
+        os.execv(cmd_sed[0],cmd_sed)
+        os._exit(os.EX_OSERR)
+    else:
+        os.close(p_read)
+        os.dup2(p_write, STDOUT)
+        os.execve(cmd[0],cmd,siteconf.env)
+        os._exit(os.EX_OSERR)
+
+
 def main():
     podhpc()
 
