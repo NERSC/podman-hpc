@@ -185,7 +185,7 @@ def call_podman(ctx,siteconf,podman_args):
 
 
 def main():
-    podhpc()
+    podhpc(prog_name='podman-hpc')
 
 if __name__ == "__main__":
     main()
