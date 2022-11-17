@@ -36,7 +36,7 @@ pass_siteconf = click.make_pass_decorator(SiteConfig, ensure=True)
 
 
 ### podman-hpc command #######################################################
-@click.group(cls=cpt.PassthroughGroup,custom_format=podman_format,epilog=podman_epilog,passthrough='podman')
+@click.group(cls=cpt.PassthroughGroup,custom_format=podman_format,epilog=podman_epilog,options_metavar="[options]",passthrough='podman')
 @click.pass_context
 @click.option("--additional-stores", type=str,
                     help="Specify other storage locations")
@@ -79,7 +79,7 @@ def podhpc(ctx,additional_stores,squash_dir,update_conf,log_level):
 
     
 ### podman-hpc migrate subcommand ############################################
-@podhpc.command()
+@podhpc.command(options_metavar="[options]")
 @pass_siteconf
 @click.argument('image',type=str)
 def migrate(siteconf,image):
@@ -90,7 +90,7 @@ def migrate(siteconf,image):
 
     
 ### podman-hpc rmsqi subcommand ##############################################
-@podhpc.command()
+@podhpc.command(options_metavar="[options]")
 @pass_siteconf
 @click.argument('image',type=str)
 def rmsqi(siteconf,image):
@@ -100,7 +100,7 @@ def rmsqi(siteconf,image):
 
         
 ### podman-hpc pull subcommand (modified) ####################################
-@podhpc.command(context_settings=dict(ignore_unknown_options=True,))
+@podhpc.command(context_settings=dict(ignore_unknown_options=True,),options_metavar="[options]")
 @pass_siteconf
 @click.pass_context
 @click.argument('podman_args', nargs=-1, type=click.UNPROCESSED)
@@ -122,10 +122,23 @@ def pull(ctx,siteconf,image,podman_args):
 
     
 ### podman-hpc shared-run subcommand #########################################
-@podhpc.command(context_settings=dict(ignore_unknown_options=True,))
-@click.argument('shared_run_args', nargs=-1, type=click.UNPROCESSED)
-def shared_run(shared_run_args=None):
-    """ This is a description of podman-hpc shared-run."""
+@podhpc.command(context_settings=dict(ignore_unknown_options=True,),options_metavar="[options]")
+@click.argument('image')
+@click.argument('shared_run_args', nargs=-1, type=click.UNPROCESSED, metavar="[COMMAND [ARG...]]")
+def shared_run(image,shared_run_args=None):
+    """ Launch a single container and exec many threads in it
+    
+    This is the recommended way to launch a container from a parallel launcher 
+    such as Slurm `srun` or `mpirun`. One container will be started (per node), and all
+    process tasks will then be launched into that container via `exec` subcommand.  
+    When all `exec` processes have concluded, the container will close and remove itself.
+    
+    For valid flag options, see help pages for `run` and `exec` subcommands:    
+    
+    \b
+      podman-hpc run --help
+      podman-hpc exec --help
+    """
     click.echo(f"Launching a shared-run with args: {shared_run_args}")
 
     localid_var = os.environ.get("PODMAN_HPC_LOCALID_VAR","SLURM_LOCALID")
@@ -163,7 +176,10 @@ def call_podman(ctx,siteconf,help,podman_args,**site_opts):
     cmd.extend(siteconf.get_cmd_extensions(ctx.info_name,site_opts))
     cmd.extend(podman_args)
 
+    # if the help flag is called, we pass podman's STDOUT stream through a pipe
+    # to a stream editor, to inject additional help page info
     if help:
+        cmd.insert(2,'--help')
         app_name = ctx.find_root().command_path
         passthrough_name = os.path.basename(cmd[0])
         
@@ -173,11 +189,11 @@ def call_podman(ctx,siteconf,help,podman_args,**site_opts):
         if formatter.getvalue():
             app_options = f"{app_name.capitalize()} {formatter.getvalue()}\n".replace('\n','\\n')
         
-        cmd.insert(2,'--help')
         cmd_sed = ['/usr/bin/sed',
                    '-e', f's/{passthrough_name}/{app_name}/',
                    '-e', f's/Options:/{app_options}{passthrough_name.capitalize()} &/'
                   ]
+        
         STDIN = 0
         STDOUT = 1
         p_read, p_write = os.pipe()
