@@ -156,32 +156,41 @@ def shared_run_launch(localid,run_cmd,env):
 @podhpc.default_command(context_settings=dict(ignore_unknown_options=True,help_option_names=[]),hidden=True)
 @pass_siteconf
 @click.pass_context
+@click.option('--help',is_flag=True,hidden=True)
 @click.argument('podman_args', nargs=-1, type=click.UNPROCESSED)
-def call_podman(ctx,siteconf,podman_args,**site_opts):
+def call_podman(ctx,siteconf,help,podman_args,**site_opts):
     cmd = [siteconf.podman_bin, ctx.info_name]
     cmd.extend(siteconf.get_cmd_extensions(ctx.info_name,site_opts))
     cmd.extend(podman_args)
 
+    if help:
+        app_name = ctx.find_root().command_path
+        passthrough_name = os.path.basename(cmd[0])
+        
+        formatter = ctx.make_formatter()
+        ctx.command.format_options(ctx,formatter)
+        app_options=''
+        if formatter.getvalue():
+            app_options = f"{app_name.capitalize()} {formatter.getvalue()}\n".replace('\n','\\n')
+        
+        cmd.insert(2,'--help')
+        cmd_sed = ['/usr/bin/sed',
+                   '-e', f's/{passthrough_name}/{app_name}/',
+                   '-e', f's/Options:/{app_options}{passthrough_name.capitalize()} &/'
+                  ]
+        STDIN = 0
+        STDOUT = 1
+        p_read, p_write = os.pipe()
+        if os.fork():
+            os.close(p_write)
+            os.dup2(p_read, STDIN)
+            os.execv(cmd_sed[0],cmd_sed)
+            os._exit(os.EX_OSERR)
+        else:
+            os.close(p_read)
+            os.dup2(p_write, STDOUT)
+            
     os.execve(cmd[0],cmd,siteconf.env)
-
-    ### exerimental, this doesn't run because of ^^^ execve
-    # stream editor to replace instances of 'podman' with 'podman-hpc'
-    cmd_sed = ['/usr/bin/sed',f's/{os.path.basename(cmd[0])}/{ctx.find_root().command_path}/']
-
-    STDIN = 0
-    STDOUT = 1
-    p_read, p_write = os.pipe()
-    if os.fork():
-        os.close(p_write)
-        os.dup2(p_read, STDIN)
-        os.execv(cmd_sed[0],cmd_sed)
-        os._exit(os.EX_OSERR)
-    else:
-        os.close(p_read)
-        os.dup2(p_write, STDOUT)
-        os.execve(cmd[0],cmd,siteconf.env)
-        os._exit(os.EX_OSERR)
-
 
 def main():
     podhpc(prog_name='podman-hpc')
