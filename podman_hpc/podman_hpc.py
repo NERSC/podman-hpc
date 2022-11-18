@@ -36,7 +36,7 @@ pass_siteconf = click.make_pass_decorator(SiteConfig, ensure=True)
 
 
 ### podman-hpc command #######################################################
-@click.group(cls=cpt.PassthroughGroup,custom_format=podman_format,epilog=podman_epilog,options_metavar="[options]",passthrough='podman')
+@click.group(cls=cpt.PassthroughGroup,custom_format=podman_format,epilog=podman_epilog,options_metavar="[options]",passthrough='podman',invoke_without_command=True,)
 @click.pass_context
 @click.option("--additional-stores", type=str,
                     help="Specify other storage locations")
@@ -54,6 +54,11 @@ def podhpc(ctx,additional_stores,squash_dir,update_conf,log_level):
     performance computing environment.
         
     """
+    overwrite = additional_stores or squash_dir or update_conf
+    if not (overwrite or ctx.invoked_subcommand):
+        click.echo(ctx.get_help())
+        ctx.exit()
+
     # set up site configuration object
     conf = SiteConfig(squash_dir=squash_dir,log_level=log_level)
     conf.read_site_modules()
@@ -63,7 +68,6 @@ def podhpc(ctx,additional_stores,squash_dir,update_conf,log_level):
     conf.config_env(hpc=True)
 
     # optionally, save the storage conf
-    overwrite = additional_stores or squash_dir or update_conf
     conf.export_storage_conf(overwrite=overwrite)
     
     # add appropriate flags to call_podman based on invoked subcommand
