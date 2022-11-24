@@ -1,8 +1,8 @@
 build*
 dist
-*.egg-info/
+*.egg-info
 *.py.swp
 *.pyc
 *.ipynb_checkpoints
-*/__pycache__/
+__pycache__
 
