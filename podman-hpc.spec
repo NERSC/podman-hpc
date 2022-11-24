@@ -23,7 +23,7 @@ Summary:	Scripts to enable Podman to run in an HPC environment
 # FIXME: Select a correct license from https://github.com/openSUSE/spec-cleaner#spdx-licenses
 License:        Apache 2.0 
 URL:            https://github.com/nersc/podman-hpc 
-Source:         podman-hpc-1.0.0.tar.gz
+Source:         %{name}-%{version}.tar.gz
 BuildRequires:  python3
 Requires:	python3-toml
 
