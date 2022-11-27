@@ -3,7 +3,7 @@ DOCDIR=$(DESTDIR)/usr/share/doc/packages/podman-hpc
 
 
 clean:
-	rm -rf dist build *.egg-info MANIFEST
+	rm -rf dist build *.egg-info MANIFEST bin/exec-wait
 
 build:
 	g++ -std=c++17 -static -o bin/exec-wait exec-wait.cpp
