@@ -12,7 +12,8 @@ from glob import glob
 import yaml
 
 
-_MOD_ENV = "PODMAN_MODULES_DIR"
+_MOD_ENV = "PODMANHPC_MODULES_DIR"
+_HOOKS_ENV = "PODMANHPC_HOOKS_DIR"
 
 
 class config:
@@ -151,7 +152,7 @@ def get_params(args):
 
 def read_confs():
 
-    mdir = os.environ.get(_MOD_ENV, "/etc/podman_hpc/modules.d")
+    mdir = os.environ.get(_MOD_ENV, f"{sys.prefix}/etc/podman_hpc/modules.d")
     confs = {}
     for d in glob(f"{mdir}/*.yaml"):
         conf = yaml.load(open(d), Loader=yaml.FullLoader)
@@ -285,9 +286,10 @@ def main():
         os.execve(exec_cmd[0], exec_cmd, os.environ)
 
     if comm == "run":
-        start = podman_args.index("run") + 1
-        for idx, item in enumerate(cmds):
-            podman_args.insert(start + idx, item)
+        ind = podman_args.index("run")
+        podman_args[ind:ind] = ['--hooks-dir',os.environ.get(_HOOKS_ENV,f"{sys.prefix}/share/containers/oci/hooks.d")]
+        ind = podman_args.index("run") + 1
+        podman_args[ind:ind] = cmds
         os.execve(conf.podman_bin, podman_args, env)
         sys.exit()
     elif comm == "pull":
