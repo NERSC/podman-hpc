@@ -3,6 +3,7 @@ include *.md
 include Makefile
 include exec-wait.cpp
 include rpmsrcprep.sh
-graft test
+include test/*.json
+graft test/modules.d
+graft test/storage
 graft extra
-global-exclude __pycache__
