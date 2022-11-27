@@ -1,0 +1,8 @@
+include *.spec
+include *.md
+include Makefile
+include exec-wait.cpp
+include rpmsrcprep.sh
+graft test
+graft extra
+global-exclude __pycache__
