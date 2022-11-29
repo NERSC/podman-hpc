@@ -1,8 +1,7 @@
 # Podman-HPC
 
-Podman-HPC (`podman-hpc`) is a wrapper for the Pod Manager (`podman`) container engine,
-which provides configuration and infrastructure for ease of use at NERSC and other
-HPC environments.
+Podman-HPC (`podman-hpc`) is a wrapper script around the Pod Manager (`podman`) container engine,
+which provides HPC configuration and infrastructure for the Podman ecosystem at NERSC.
 
 ## Prerequisites
 1. `podman` should be installed separately, per the instructions at https://podman.io/
