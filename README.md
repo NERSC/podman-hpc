@@ -14,7 +14,7 @@ To build and deploy an RPM using this repo:
 1. `./rpmsrcprep.sh`
 1. `rpmbuild -ba podman-hpc.spec`
 1. Deploy resulting RPM as usual.
-1. Add/edit site modules as required in `/etc/podman_hpc/modules.d`
+1. (Optional) Add/edit site modules as required in `/etc/podman_hpc/modules.d`
 
 ## Developer Installation
 The `podman-hpc` package is bundled as a python package and may be installed
@@ -24,4 +24,5 @@ in an isolated python environment for development or testing.
 1. `cd podman-hpc`
 1. `pip install .`
 1. `python -m podman_hpc.configure_hooks`
+1. (Optional) Add/edit site modules as required in `<podman-hpc python sys.prefix>/etc/podman_hpc/modules.d`
 
