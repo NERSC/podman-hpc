@@ -104,12 +104,12 @@ def config_storage(conf, additional_stores=None):
     return stor_conf
 
 
-def config_containers(conf, args, confs):
+def config_containers(conf, args, confs, modules_dir):
     """
     Create a container conf object
     """
     cont_conf = conf.get_default_containers_conf()
-    cmds = []
+    cmds = ["-e", "%s=%s" % (_MOD_ENV, modules_dir)]
     for mod, mconf in confs.items():
         cli_arg = mconf["cli_arg"]
         if vars(args).get(cli_arg):
@@ -157,7 +157,7 @@ def read_confs():
     for d in glob(f"{mdir}/*.yaml"):
         conf = yaml.load(open(d), Loader=yaml.FullLoader)
         confs[conf["name"]] = conf
-    return confs
+    return confs, mdir
 
 
 def add_args(parser, confs):
@@ -263,7 +263,7 @@ def main():
         action="store_true",
         help="Force update of storage conf",
     )
-    confs = read_confs()
+    confs, modules_dir = read_confs()
     add_args(parser, confs)
     args, podman_args = parser.parse_known_args()
     if "--help" in podman_args:
@@ -279,7 +279,7 @@ def main():
 
     # Generate Configs
     stor_conf = config_storage(conf, additional_stores=args.additional_stores)
-    cont_conf, cmds = config_containers(conf, args, confs)
+    cont_conf, cmds = config_containers(conf, args, confs, modules_dir)
     overwrite = False
     if args.additional_stores or args.squash_dir or args.update_conf:
         overwrite = True
