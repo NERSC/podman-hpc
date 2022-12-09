@@ -171,7 +171,7 @@ def filter_podman_subcommand(podman_bin, subcommand, podman_args):
     """ Filter invalid arguments from an argument list
     for a given podman subcommand based on its --help text. """
     # extract valid flags from subcommand help text, and populate an arg parser
-    opt_regex = re.compile("^\s*(?:(-\w), )?(--\w[\w\-]+)(?:\s(\w+))?")
+    opt_regex = re.compile(r"^\s*(?:(-\w), )?(--\w[\w\-]+)(?:\s(\w+))?")
     p = argparse.ArgumentParser(exit_on_error=False)
     with os.popen(" ".join([podman_bin, subcommand, "--help"])) as f:
         for line in f:
@@ -230,7 +230,7 @@ def shared_run_args(podman_args, image, container_name="hpc"):
         "fatal",
     ]
     pexec.extend([container_name])
-    pexec.extend(podman_args[podman_args.index(image) + 1 :])
+    pexec.extend(podman_args[podman_args.index(image)+1:])
 
     print(f"podman run command:\n\t{prun}")
     print(f"podman exec command:\n\t{pexec}")
@@ -304,7 +304,7 @@ def main():
 
         shared_run_launch(localid, run_cmd, os.environ)
 
-        # wait for the named container to start 
+        # wait for the named container to start
         # (maybe convert this to python instead of bash)
         os.system(
             f"while [ $(podman --log-level fatal ps -a | grep {container_name} | grep -c Up) -eq 0 ] ; do sleep 0.2"
