@@ -1,26 +1,21 @@
+.PHONY: clean setuptools-build_py build rpmbuild-install install
 
 DOCDIR=$(DESTDIR)/usr/share/doc/packages/podman-hpc
 
 
 clean:
-	rm -rf dist build
+	rm -rf dist build *.egg-info MANIFEST bin/exec-wait
 
-build:
+setuptools-build_py:
 	g++ -std=c++17 -static -o bin/exec-wait exec-wait.cpp
 
-install: 
+build: setuptools-build_py
+
+rpmbuild-install: 
 	python3 -m setup install --root=$(DESTDIR) --prefix=/usr
-	install -d ./etc $(DOCDIR)/
-	install ./bin/fuse-overlayfs-wrap $(DESTDIR)/usr/bin/
-	install ./bin/exec-wait $(DESTDIR)/usr/bin/
-	mkdir -p $(DESTDIR)/etc/podman_hpc/
-	install ./etc/01-gpu.conf $(DESTDIR)/etc/podman_hpc/
-	install ./etc/02-mpich.conf $(DESTDIR)/etc/podman_hpc/
-	mkdir -p $(DESTDIR)/etc/podman_hpc/modules.d
-	install ./etc/modules.d/gpu.yaml $(DESTDIR)/etc/podman_hpc/modules.d
-	install ./etc/modules.d/mpich.yaml $(DESTDIR)/etc/podman_hpc/modules.d
-	mkdir -p $(DESTDIR)//usr/share/containers/oci/hooks.d/
-	install ./hooks.d/02-hook_tool.json $(DESTDIR)//usr/share/containers/oci/hooks.d/
+	python3 -m podman_hpc.configure_hooks \
+		--hooksd $(DESTDIR)/usr/share/containers/oci/hooks.d
+	mkdir -p $(DESTDIR)/etc/
+	ln -s ../usr/etc/podman_hpc $(DESTDIR)/etc/podman_hpc
 
-
-
+install: rpmbuild-install
