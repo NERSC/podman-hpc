@@ -37,39 +37,39 @@ class config:
         self.podman_bin = which("podman")
         if self.podman_bin is None:
             raise OSError("No podman binary found in PATH.")
-        self.mount_program = which('fuse-overlayfs-wrap')
-        self.conmon_bin = which('conmon')
-        self.runtime = 'crun'
+        self.mount_program = which("fuse-overlayfs-wrap")
+        self.conmon_bin = which("conmon")
+        self.runtime = "crun"
         self.options = []
 
     def get_default_store_conf(self):
-        return {'storage': {
-                   'driver': 'overlay',
-                   'graphroot': self.graph_root,
-                   'runroot': self.run_root,
-                   'options': {
-                       'size': '',
-                       'remap-uids': '',
-                       'remap-gids': '',
-                       'ignore_chown_errors': 'true',
-                       'remap-user': '',
-                       'remap-group': '',
-                       'mount_program': self.mount_program,
-                       'mountopt': '',
-                       'overlay': {}
-                    }
-                  }
-                }
+        return {
+            "storage": {
+                "driver": "overlay",
+                "graphroot": self.graph_root,
+                "runroot": self.run_root,
+                "options": {
+                    "size": "",
+                    "remap-uids": "",
+                    "remap-gids": "",
+                    "ignore_chown_errors": "true",
+                    "remap-user": "",
+                    "remap-group": "",
+                    "mount_program": self.mount_program,
+                    "mountopt": "",
+                    "overlay": {},
+                },
+            }
+        }
 
     def get_default_containers_conf(self):
-        return {'engine': {
-                    'conmon_path': [self.conmon_bin],
-                  },
-                'containers': {
-                    'seccomp_profile': 'unconfined',
-                    'runtime': self.runtime
-                  }
-                }
+        return {
+            "engine": {"conmon_path": [self.conmon_bin]},
+            "containers": {
+                "seccomp_profile": "unconfined",
+                "runtime": self.runtime,
+            },
+        }
 
     def get_config_home(self):
         return "%s/config" % (self.xdg_base)
@@ -111,10 +111,10 @@ def config_containers(conf, args, confs):
     cont_conf = conf.get_default_containers_conf()
     cmds = []
     for mod, mconf in confs.items():
-        cli_arg = mconf['cli_arg']
+        cli_arg = mconf["cli_arg"]
         if vars(args).get(cli_arg):
             cmds.extend(mconf.get("additional_args", []))
-            cmds.extend(["-e", "%s=1" % (mconf['env'])])
+            cmds.extend(["-e", "%s=1" % (mconf["env"])])
 
     cont_conf["containers"]["seccomp_profile"] = "unconfined"
     return cont_conf, cmds
@@ -156,90 +156,113 @@ def read_confs():
     confs = {}
     for d in glob(f"{mdir}/*.yaml"):
         conf = yaml.load(open(d), Loader=yaml.FullLoader)
-        confs[conf['name']] = conf
+        confs[conf["name"]] = conf
     return confs
 
 
 def add_args(parser, confs):
     for k, v in confs.items():
-        parser.add_argument("--%s" % (v["cli_arg"]), action="store_true",
-                            help=v.get("help"))
+        parser.add_argument(
+            "--%s" % (v["cli_arg"]), action="store_true", help=v.get("help")
+        )
 
 
 def filter_podman_subcommand(podman_bin, subcommand, podman_args):
-    """ Filter invalid arguments from an argument list 
+    """ Filter invalid arguments from an argument list
     for a given podman subcommand based on its --help text. """
     # extract valid flags from subcommand help text, and populate an arg parser
     opt_regex = re.compile("^\s*(?:(-\w), )?(--\w[\w\-]+)(?:\s(\w+))?")
     p = argparse.ArgumentParser(exit_on_error=False)
-    with os.popen(' '.join([podman_bin,subcommand,'--help'])) as f:
+    with os.popen(" ".join([podman_bin, subcommand, "--help"])) as f:
         for line in f:
             opt = opt_regex.match(line)
             if opt:
-                action = 'store' if opt.groups()[2] else 'store_true'
+                action = "store" if opt.groups()[2] else "store_true"
                 flags = [flag for flag in opt.groups()[:-1] if flag]
-                p.add_argument(*flags,action=action)
+                p.add_argument(*flags, action=action)
     # remove unknown args from the podman_args
     subcmd_args = podman_args.copy()
     unknowns = p.parse_known_args(subcmd_args)[1]
-    uk_safe={} # indices of valid args that string== unknowns
+    uk_safe = {}  # indices of valid args that string== unknowns
     while unknowns:
-        ukd={} # candidate indices of where to remove unknowns
+        ukd = {}  # candidate indices of where to remove unknowns
         for uk in set(unknowns):
-            ukd[uk]=[idx for idx,arg in enumerate(subcmd_args) if (arg==uk and idx not in uk_safe.get(uk,[]))]
-        uk=unknowns.pop(0) 
+            ukd[uk] = [
+                idx
+                for idx, arg in enumerate(subcmd_args)
+                if (arg == uk and idx not in uk_safe.get(uk, []))
+            ]
+        uk = unknowns.pop(0)
         # find and remove an invalid occurence of uk
         while True:
             args_tmp = subcmd_args.copy()
             args_tmp.pop(ukd[uk][0])
             try:
-                if p.parse_known_args(args_tmp)[1]==unknowns:
+                if p.parse_known_args(args_tmp)[1] == unknowns:
                     subcmd_args.pop(ukd[uk][0])
                     break
             except argparse.ArgumentError:
                 pass
-            uk_safe.setdefault(uk,[]).append(ukd[uk].pop(0))
-    return [podman_bin,subcommand]+subcmd_args
+            uk_safe.setdefault(uk, []).append(ukd[uk].pop(0))
+    return [podman_bin, subcommand] + subcmd_args
 
 
-def shared_run_args(podman_args,image,container_name='hpc'):
+def shared_run_args(podman_args, image, container_name="hpc"):
     """ Construct argument list for `podman run` and `podman exec`
     by filtering flags passed to `podman shared-run` """
     print("calling shared_run_args with podman_args:")
     print(f"\t{podman_args}")
-    
-    # generate valid subcommands from the given podman_args
-    prun =filter_podman_subcommand(podman_args[0],'run',podman_args)
-    pexec=filter_podman_subcommand(podman_args[0],'exec',podman_args)
 
-    prun[2:2] = ['--rm','-d','--exec-wait','--name',container_name]
-    prun.extend([image,'/bin/exec-wait'])
-    pexec[2:2] = ['-e','"PALS_*"','-e','"PMI_*"','-e','"SLURM_*"','--log-level','fatal']
+    # generate valid subcommands from the given podman_args
+    prun = filter_podman_subcommand(podman_args[0], "run", podman_args)
+    pexec = filter_podman_subcommand(podman_args[0], "exec", podman_args)
+
+    prun[2:2] = ["--rm", "-d", "--exec-wait", "--name", container_name]
+    prun.extend([image, "/bin/exec-wait"])
+    pexec[2:2] = [
+        "-e",
+        '"PALS_*"',
+        "-e",
+        '"PMI_*"',
+        "-e",
+        '"SLURM_*"',
+        "--log-level",
+        "fatal",
+    ]
     pexec.extend([container_name])
-    pexec.extend(podman_args[podman_args.index(image)+1:])
+    pexec.extend(podman_args[podman_args.index(image) + 1 :])
 
     print(f"podman run command:\n\t{prun}")
     print(f"podman exec command:\n\t{pexec}")
 
     return prun, pexec
 
-def shared_run_launch(localid,run_cmd,env):
+
+def shared_run_launch(localid, run_cmd, env):
     """ helper to break out of an if block """
-    if localid and localid!=0:
+    if localid and localid != 0:
         return
     pid = os.fork()
-    if pid==0:
-        os.execve(run_cmd[0],run_cmd,env)
+    if pid == 0:
+        os.execve(run_cmd[0], run_cmd, env)
     return pid
 
+
 def main():
-    parser = argparse.ArgumentParser(prog='podman-hpc', add_help=False)
-    parser.add_argument("--additional-stores", type=str,
-                        help="Specify other storage locations")
-    parser.add_argument("--squash-dir", type=str,
-                        help="Specify alternate squash directory location")
-    parser.add_argument("--update-conf", action="store_true",
-                        help="Force update of storage conf")
+    parser = argparse.ArgumentParser(prog="podman-hpc", add_help=False)
+    parser.add_argument(
+        "--additional-stores", type=str, help="Specify other storage locations"
+    )
+    parser.add_argument(
+        "--squash-dir",
+        type=str,
+        help="Specify alternate squash directory location",
+    )
+    parser.add_argument(
+        "--update-conf",
+        action="store_true",
+        help="Force update of storage conf",
+    )
     confs = read_confs()
     add_args(parser, confs)
     args, podman_args = parser.parse_known_args()
@@ -273,21 +296,29 @@ def main():
         cmds.extend(["--log-level", "fatal"])
 
     if comm == "shared-run":
-        localid_var = os.environ.get("PODMAN_HPC_LOCALID_VAR","SLURM_LOCALID")
+        localid_var = os.environ.get("PODMAN_HPC_LOCALID_VAR", "SLURM_LOCALID")
         localid = os.environ.get(localid_var)
 
         container_name = f"uid-{os.getuid()}-pid-{os.getppid()}"
-        run_cmd, exec_cmd = shared_run_args(podman_args,image,container_name)
+        run_cmd, exec_cmd = shared_run_args(podman_args, image, container_name)
 
-        shared_run_launch(localid,run_cmd,os.environ)
+        shared_run_launch(localid, run_cmd, os.environ)
 
-        # wait for the named container to start (maybe convert this to python instead of bash)
-        os.system(f'while [ $(podman --log-level fatal ps -a | grep {container_name} | grep -c Up) -eq 0 ] ; do sleep 0.2')
+        # wait for the named container to start 
+        # (maybe convert this to python instead of bash)
+        os.system(
+            f"while [ $(podman --log-level fatal ps -a | grep {container_name} | grep -c Up) -eq 0 ] ; do sleep 0.2"
+        )
         os.execve(exec_cmd[0], exec_cmd, os.environ)
 
     if comm == "run":
         ind = podman_args.index("run")
-        podman_args[ind:ind] = ['--hooks-dir',os.environ.get(_HOOKS_ENV,f"{sys.prefix}/share/containers/oci/hooks.d")]
+        podman_args[ind:ind] = [
+            "--hooks-dir",
+            os.environ.get(
+                _HOOKS_ENV, f"{sys.prefix}/share/containers/oci/hooks.d"
+            ),
+        ]
         ind = podman_args.index("run") + 1
         podman_args[ind:ind] = cmds
         os.execve(conf.podman_bin, podman_args, env)

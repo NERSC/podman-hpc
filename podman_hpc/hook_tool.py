@@ -61,17 +61,19 @@ def ldconfig():
         log("ldconfig failed")
         log(ret)
 
-def resolve_src(src,modulesd=os.path.abspath('')):
+
+def resolve_src(src, modulesd=os.path.abspath('')):
     if not os.path.isabs(src):
-        src = os.path.join(modulesd,src)
+        src = os.path.join(modulesd, src)
     return os.path.abspath(os.path.expandvars(src))
+
 
 def do_plugin(rp, mod, modulesd):
     log(mod)
     log(rp)
     for f in mod['copy']:
         (src, tgt) = f.split(":")
-        src = resolve_src(src,modulesd)
+        src = resolve_src(src, modulesd)
         tgt2 = os.path.join(rp, tgt[1:])
         log("%s %s" % (src, tgt2))
         if os.path.exists(tgt2):
@@ -82,7 +84,7 @@ def do_plugin(rp, mod, modulesd):
         copyfile(src, tgt2, follow_symlinks=False)
     for f in mod['bind']:
         (src, tgt) = f.split(":")
-        src = resolve_src(src,modulesd)
+        src = resolve_src(src, modulesd)
         if src.endswith('*'):
             for fp in glob(src):
                 tgt2 = os.path.join(rp, fp[1:])
@@ -103,7 +105,8 @@ def read_confs(mdir):
 def main():
     global logger
 
-    plug_conf_fn = os.environ.get(_MOD_ENV,f"{sys.prefix}/etc/podman_hpc/modules.d")
+    plug_conf_fn = os.environ.get(_MOD_ENV,
+                                  f"{sys.prefix}/etc/podman_hpc/modules.d")
     plug_conf = read_confs(plug_conf_fn)
 
     lf = os.environ.get("LOG_PLUGIN")
@@ -126,7 +129,7 @@ def main():
     for m in plug_conf:
         if plug_conf[m]['env'] in envs:
             log("Loading %s" % (m))
-            do_plugin(rp, plug_conf[m],plug_conf_fn)
+            do_plugin(rp, plug_conf[m], plug_conf_fn)
     ret = os.chroot(rp)
     log(ret)
 
