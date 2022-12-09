@@ -307,7 +307,9 @@ def main():
         # wait for the named container to start
         # (maybe convert this to python instead of bash)
         os.system(
-            f"while [ $(podman --log-level fatal ps -a | grep {container_name} | grep -c Up) -eq 0 ] ; do sleep 0.2"
+                "while [ $(podman --log-level fatal ps -a |"
+                f"grep {container_name} | grep -c Up) -eq 0 ] ; "
+                "do sleep 0.2"
         )
         os.execve(exec_cmd[0], exec_cmd, os.environ)
 
