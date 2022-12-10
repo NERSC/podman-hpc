@@ -105,29 +105,30 @@ def read_confs(mdir):
 def main():
     global logger
 
-    plug_conf_fn = os.environ.get(_MOD_ENV,
+    inp = json.load(sys.stdin)
+    pid = inp['pid']
+    cf = json.load(open("config.json"))
+    cf_env = {}
+    for e in cf['process']['env']:
+        k, v = e.split("=", maxsplit=1)
+        cf_env[k] = v
+
+    plug_conf_fn = cf_env.get(_MOD_ENV,
                                   f"{sys.prefix}/etc/podman_hpc/modules.d")
     plug_conf = read_confs(plug_conf_fn)
 
-    lf = os.environ.get("LOG_PLUGIN")
+    lf = cf_env.get("LOG_PLUGIN")
     if lf:
         logger = open(lf, "w")
-    log(os.environ)
-    inp = json.load(sys.stdin)
     log(json.dumps(inp, indent=2))
-    pid = inp['pid']
-    cf = json.load(open("config.json"))
+    log(os.environ)
     log(json.dumps(cf, indent=2))
     rp = cf["root"]["path"]
 
     setns(pid, "mnt")
     os.chroot("/")
-    envs = {}
-    for e in cf['process']['env']:
-        k, v = e.split("=", maxsplit=1)
-        envs[k] = v
     for m in plug_conf:
-        if plug_conf[m]['env'] in envs:
+        if plug_conf[m]['env'] in cf_env:
             log("Loading %s" % (m))
             do_plugin(rp, plug_conf[m], plug_conf_fn)
     ret = os.chroot(rp)
