@@ -111,7 +111,7 @@ def config_containers(conf, args, confs, modules_dir):
     cont_conf = conf.get_default_containers_conf()
     cmds = ["-e", "%s=%s" % (_MOD_ENV, modules_dir)]
     for mod, mconf in confs.items():
-        cli_arg = mconf["cli_arg"]
+        cli_arg = mconf["cli_arg"].replace('-','_')
         if vars(args).get(cli_arg):
             cmds.extend(mconf.get("additional_args", []))
             cmds.extend(["-e", "%s=1" % (mconf["env"])])
