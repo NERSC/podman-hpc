@@ -4,7 +4,7 @@ DOCDIR=$(DESTDIR)/usr/share/doc/packages/podman-hpc
 
 
 clean:
-	rm -rf dist build *.egg-info MANIFEST bin/exec-wait
+	rm -rf dist build *.egg-info MANIFEST bin/exec-wait podman_hpc/*.pyc podman_hpc/__pycache__
 
 setuptools-build_py:
 	g++ -std=c++17 -static -o bin/exec-wait exec-wait.cpp
