@@ -314,17 +314,15 @@ def main():
         localid = os.environ.get(localid_var)
 
         container_name = f"uid-{os.getuid()}-pid-{os.getppid()}"
-        run_cmd, exec_cmd = shared_run_args(podman_args, image, container_name,True)
+        run_cmd, exec_cmd = shared_run_args(podman_args, image, container_name)
 
         shared_run_launch(localid, run_cmd, env)
         
         # wait for container to exist
         while exitcode(os.system(f"podman --log-level fatal container exists {container_name}")):
             time.sleep(0.2)
-            print(f"waiting for container {container_name} to start")
         # wait for container to be "running"
         os.system(f"podman wait --log-level fatal --condition running {container_name} >/dev/null 2>&1")
-        print("container started... execute podman exec")
         os.execve(exec_cmd[0], exec_cmd, env)
 
     if comm == "run":
