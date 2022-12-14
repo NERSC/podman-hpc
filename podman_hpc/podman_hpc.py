@@ -4,6 +4,7 @@ import argparse
 import os
 import sys
 import re
+import time
 from copy import deepcopy
 from .migrate2scratch import MigrateUtils
 import toml
@@ -15,6 +16,10 @@ import yaml
 _MOD_ENV = "PODMANHPC_MODULES_DIR"
 _HOOKS_ENV = "PODMANHPC_HOOKS_DIR"
 
+# os.waitstatus_to_exitcode(status) does not exist until python 3.9
+# so we reimplement here for python 3.6
+def exitcode(wait_status):
+    return os.WEXITSTATUS(wait_status) if os.WIFEXITED(wait_status) else -1*os.WTERMSIG(wait_status)
 
 class config:
     """
@@ -207,33 +212,42 @@ def filter_podman_subcommand(podman_bin, subcommand, podman_args):
     return [podman_bin, subcommand] + subcmd_args
 
 
-def shared_run_args(podman_args, image, container_name="hpc"):
+def shared_run_args(podman_args, image, container_name="hpc",debug=False):
     """ Construct argument list for `podman run` and `podman exec`
     by filtering flags passed to `podman shared-run` """
-    print("calling shared_run_args with podman_args:")
-    print(f"\t{podman_args}")
+    if (debug):
+        print("calling shared_run_args with input podman_args:")
+        print(f"\t{podman_args}")
 
     # generate valid subcommands from the given podman_args
-    prun = filter_podman_subcommand(podman_args[0], "run", podman_args)
-    pexec = filter_podman_subcommand(podman_args[0], "exec", podman_args)
+    ind_img = podman_args.index(image)
+    prun = filter_podman_subcommand(podman_args[0], "run", podman_args[:ind_img])
+    pexec = filter_podman_subcommand(podman_args[0], "exec", podman_args[:ind_img])
 
-    prun[2:2] = ["--rm", "-d", "--exec-wait", "--name", container_name]
-    prun.extend([image, "/bin/exec-wait"])
+    prun[2:2] = [
+                    "--hooks-dir",
+                    os.environ.get(
+                        _HOOKS_ENV, 
+                        f"{sys.prefix}/share/containers/oci/hooks.d"
+                    ),
+                    "--log-level","fatal",
+                    "--rm", "-d",
+                    "-e", "ENABLE_EXEC_WAIT=1",
+                    "--name", container_name
+                ]
+    prun.extend([image, "/usr/bin/exec-wait", "-d"])
     pexec[2:2] = [
-        "-e",
-        '"PALS_*"',
-        "-e",
-        '"PMI_*"',
-        "-e",
-        '"SLURM_*"',
-        "--log-level",
-        "fatal",
+        "-e", '"PALS_*"',
+        "-e", '"PMI_*"',
+        "-e", '"SLURM_*"',
+        "--log-level", "fatal",
     ]
     pexec.extend([container_name])
-    pexec.extend(podman_args[podman_args.index(image)+1:])
+    pexec.extend(podman_args[ind_img+1:])
 
-    print(f"podman run command:\n\t{prun}")
-    print(f"podman exec command:\n\t{pexec}")
+    if (debug):
+        print(f"will execute podman run command:\n\t{prun}")
+        print(f"will execute podman exec command:\n\t{pexec}")
 
     return prun, pexec
 
@@ -300,18 +314,18 @@ def main():
         localid = os.environ.get(localid_var)
 
         container_name = f"uid-{os.getuid()}-pid-{os.getppid()}"
-        run_cmd, exec_cmd = shared_run_args(podman_args, image, container_name)
+        run_cmd, exec_cmd = shared_run_args(podman_args, image, container_name,True)
 
-        shared_run_launch(localid, run_cmd, os.environ)
-
-        # wait for the named container to start
-        # (maybe convert this to python instead of bash)
-        os.system(
-                "while [ $(podman --log-level fatal ps -a |"
-                f"grep {container_name} | grep -c Up) -eq 0 ] ; "
-                "do sleep 0.2"
-        )
-        os.execve(exec_cmd[0], exec_cmd, os.environ)
+        shared_run_launch(localid, run_cmd, env)
+        
+        # wait for container to exist
+        while exitcode(os.system(f"podman --log-level fatal container exists {container_name}")):
+            time.sleep(0.2)
+            print(f"waiting for container {container_name} to start")
+        # wait for container to be "running"
+        os.system(f"podman wait --log-level fatal --condition running {container_name} >/dev/null 2>&1")
+        print("container started... execute podman exec")
+        os.execve(exec_cmd[0], exec_cmd, env)
 
     if comm == "run":
         ind = podman_args.index("run")
