@@ -5,52 +5,11 @@ env: ENABLE_GPU
 additional_args:
   - -e NVIDIA_VISIBLE_DEVICES
 copy:
-  - ../01-gpu.conf:/etc/ld.so.conf.d/01-gpu.conf
-  - /usr/lib64/libnvcuvid.so:/usr/lib64/libnvcuvid.so
-  - /usr/lib64/libnvcuvid.so.1:/usr/lib64/libnvcuvid.so.1
-  - /usr/lib64/libnvcuvid.so.515.48.07:/usr/lib64/libnvcuvid.so.515.48.07
-  - /usr/lib64/libnvidia-allocator.so.1:/usr/lib64/libnvidia-allocator.so.1
-  - /usr/lib64/libnvidia-allocator.so.515.48.07:/usr/lib64/libnvidia-allocator.so.515.48.07
-  - /usr/lib64/libnvidia-cfg.so.1:/usr/lib64/libnvidia-cfg.so.1
-  - /usr/lib64/libnvidia-cfg.so.515.48.07:/usr/lib64/libnvidia-cfg.so.515.48.07
-  - /usr/lib64/libnvidia-compiler.so.515.48.07:/usr/lib64/libnvidia-compiler.so.515.48.07
-  - /usr/lib64/libnvidia-eglcore.so.515.48.07:/usr/lib64/libnvidia-eglcore.so.515.48.07
-  - /usr/lib64/libnvidia-egl-wayland.so.1:/usr/lib64/libnvidia-egl-wayland.so.1
-  - /usr/lib64/libnvidia-egl-wayland.so.1.1.9:/usr/lib64/libnvidia-egl-wayland.so.1.1.9
-  - /usr/lib64/libnvidia-encode.so.1:/usr/lib64/libnvidia-encode.so.1
-  - /usr/lib64/libnvidia-encode.so.515.48.07:/usr/lib64/libnvidia-encode.so.515.48.07
-  - /usr/lib64/libnvidia-fbc.so.1:/usr/lib64/libnvidia-fbc.so.1
-  - /usr/lib64/libnvidia-fbc.so.515.48.07:/usr/lib64/libnvidia-fbc.so.515.48.07
-  - /usr/lib64/libnvidia-glcore.so.515.48.07:/usr/lib64/libnvidia-glcore.so.515.48.07
-  - /usr/lib64/libnvidia-glsi.so.515.48.07:/usr/lib64/libnvidia-glsi.so.515.48.07
-  - /usr/lib64/libnvidia-glvkspirv.so.515.48.07:/usr/lib64/libnvidia-glvkspirv.so.515.48.07
-  - /usr/lib64/libnvidia-gtk2.so.515.48.07:/usr/lib64/libnvidia-gtk2.so.515.48.07
-  - /usr/lib64/libnvidia-gtk3.so.515.48.07:/usr/lib64/libnvidia-gtk3.so.515.48.07
-  - /usr/lib64/libnvidia-ml.so:/usr/lib64/libnvidia-ml.so
-  - /usr/lib64/libnvidia-ml.so.1:/usr/lib64/libnvidia-ml.so.1
-  - /usr/lib64/libnvidia-ml.so.515.48.07:/usr/lib64/libnvidia-ml.so.515.48.07
-  - /usr/lib64/libnvidia-ngx.so.1:/usr/lib64/libnvidia-ngx.so.1
-  - /usr/lib64/libnvidia-ngx.so.515.48.07:/usr/lib64/libnvidia-ngx.so.515.48.07
-  - /usr/lib64/libnvidia-opencl.so.1:/usr/lib64/libnvidia-opencl.so.1
-  - /usr/lib64/libnvidia-opencl.so.515.48.07:/usr/lib64/libnvidia-opencl.so.515.48.07
-  - /usr/lib64/libnvidia-opticalflow.so.1:/usr/lib64/libnvidia-opticalflow.so.1
-  - /usr/lib64/libnvidia-opticalflow.so.515.48.07:/usr/lib64/libnvidia-opticalflow.so.515.48.07
-  - /usr/lib64/libnvidia-ptxjitcompiler.so.1:/usr/lib64/libnvidia-ptxjitcompiler.so.1
-  - /usr/lib64/libnvidia-ptxjitcompiler.so.515.48.07:/usr/lib64/libnvidia-ptxjitcompiler.so.515.48.07
-  - /usr/lib64/libnvidia-rtcore.so.515.48.07:/usr/lib64/libnvidia-rtcore.so.515.48.07
-  - /usr/lib64/libnvidia-tls.so.515.48.07:/usr/lib64/libnvidia-tls.so.515.48.07
-  - /usr/lib64/libnvoptix.so.1:/usr/lib64/libnvoptix.so.1
-  - /usr/lib64/libnvoptix.so.515.48.07:/usr/lib64/libnvoptix.so.515.48.07
-  - /usr/lib64/libnvperf_dcgm_host.so:/usr/lib64/libnvperf_dcgm_host.so
-  - /usr/lib64/libnvperf_host.so:/usr/lib64/libnvperf_host.so
-  - /usr/lib64/nvidia/libOpenCL.so.1:/usr/lib64/libOpenCL.so.1
-  - /usr/lib64/nvidia/libOpenCL.so.1.0.0:/usr/lib64/libOpenCL.so.1.0.0
-  - /usr/lib64/libcuda.so:/usr/lib64/libcuda.so
-  - /usr/lib64/libcuda.so.1:/usr/lib64/libcuda.so.1
-  - /usr/lib64/libcuda.so.515.48.07:/usr/lib64/libcuda.so.515.48.07
-  - /opt/cray/pe/mpich/default/gtl/lib/libmpi_gtl_cuda.so:/usr/lib64/libmpi_gtl_cuda.so
-  - /opt/cray/pe/mpich/default/gtl/lib/libmpi_gtl_cuda.so.0:/usr/lib64/libmpi_gtl_cuda.so.0
-  - /opt/cray/pe/mpich/default/gtl/lib/libmpi_gtl_cuda.so.0.0.0:/usr/lib64/libmpi_gtl_cuda.so.0.0.0
+  - /etc/podman-hpc/01-gpu.conf:/etc/ld.so.conf.d/01-gpu.conf
+  - /usr/lib64/libnv*:/usr/lib64/libnv*
+  - /usr/lib64/nvidia/libOpenCL*:/usr/lib64/libOpenCL*
+  - /usr/lib64/libcuda*:/usr/lib64/libcuda*
+  - /opt/cray/pe/mpich/default/gtl/lib/libmpi_gtl_cuda*:/usr/lib64/libmpi_gtl_cuda*
 bind:
   - /usr/bin/nvidia-smi:/usr/bin/nvidia-smi
   - /dev/nvidiactl:/dev/nvidiactl
