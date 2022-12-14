@@ -12,13 +12,13 @@ additional_args:
   - --pid=host
   - --privileged
 copy:
-  - /etc/podman-hpc/02-mpich.conf:/etc/ld.so.conf.d/02-mpich.conf
+  - ../02-mpich.conf:/etc/ld.so.conf.d/02-mpich.conf
 bind:
   - /dev/xpmem:/dev/xpmem
   - /dev/shm:/dev/shm
   - /dev/ss0:/dev/ss0
   - /dev/cxi*:/dev/cxi*
-  - /usr/lib/shifter/mpich-2.2:/opt/udiImage/modules/mpich
-  - /opt/cray/libfabric/*/lib64/libfabric:/opt/cray/libfabric/*/lib64/libfabric
+  - /usr/lib/shifter/mpich-1.3/:/opt/udiImage/modules/mpich
+  - /opt/cray/libfabric/1.15.0.0/lib64/libfabric:/opt/cray/libfabric/1.15.0.0/lib64/libfabric
   - /var/spool/slurmd:/var/spool/slurmd
   - /etc/libibverbs.d:/etc/libibverbs.d
