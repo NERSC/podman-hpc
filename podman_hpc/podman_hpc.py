@@ -17,6 +17,7 @@ else:
 
 _MOD_ENV = "PODMANHPC_MODULES_DIR"
 _HOOKS_ENV = "PODMANHPC_HOOKS_DIR"
+_HOOKS_ANNO = "podman_hpc.hook_tool"
 
 # os.waitstatus_to_exitcode(status) does not exist until python 3.9
 # so we reimplement here for python 3.6
@@ -117,6 +118,7 @@ def config_containers(conf, args, confs, modules_dir):
     """
     cont_conf = conf.get_default_containers_conf()
     cmds = ["-e", "%s=%s" % (_MOD_ENV, modules_dir)]
+    cmds.extend(["--annotation", "%s=true" % (_HOOKS_ANNO)])
     for mod, mconf in confs.items():
         cli_arg = mconf["cli_arg"].replace('-','_')
         if vars(args).get(cli_arg):

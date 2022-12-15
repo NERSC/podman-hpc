@@ -12,11 +12,12 @@ hook_text = cleandoc(
         "version": "1.0.0",
         "hook": {{
             "path": "{os.path.join(sys.prefix,'bin','hook_tool')}",
-            "args": ["hook_tool"],
-            "env": [ "DISABLED_LOG_PLUGIN=/tmp/plugin.log" ]
+            "args": ["hook_tool"]
         }},
         "when": {{
-            "always": true
+            "annotations": {{
+               "podman_hpc.hook_tool": "true"
+            }}
         }},
         "stages": ["prestart"]
     }}
