@@ -12,7 +12,7 @@ additional_args:
   - --pid=host
   - --privileged
 copy:
-  - /etc/podman-hpc/02-mpich.conf:/etc/ld.so.conf.d/02-mpich.conf
+  - ../podman-hpc/02-mpich.conf:/etc/ld.so.conf.d/02-mpich.conf
 bind:
   - /dev/xpmem:/dev/xpmem
   - /dev/shm:/dev/shm

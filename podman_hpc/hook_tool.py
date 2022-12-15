@@ -69,29 +69,42 @@ def resolve_src(src, modulesd=os.path.abspath('')):
 
 
 def do_plugin(rp, mod, modulesd):
+    """
+    set up to do copies and bind mounts
+    handle wildcards appropriately
+    glob over everything just to be safe
+    """
     log(mod)
     log(rp)
     for f in mod['copy']:
         (src, tgt) = f.split(":")
         src = resolve_src(src, modulesd)
-        tgt2 = os.path.join(rp, tgt[1:])
-        log("%s %s" % (src, tgt2))
-        if os.path.exists(tgt2):
-            os.remove(tgt2)
-        tgt_dir = os.path.dirname(tgt2)
-        if not os.path.exists(tgt_dir):
-            os.makedirs(tgt_dir)
-        copyfile(src, tgt2, follow_symlinks=False)
+        #just glob over everything
+        for path in glob(src):
+            #make sure path doesn't start with a string, or os.path.join will fail
+            if path.startswith('/'):
+                path = path[1:]
+            else:
+                continue
+            copy_target = os.path.join(rp, path)
+            log("%s %s" % (src, copy_target))
+            if os.path.exists(copy_target):
+                shutil.rmtree(copy_target)
+            os.makedirs(copy_target)
+            copyfile(src, copy_target, follow_symlinks=False)
+
+    #handle bind in a similar way
     for f in mod['bind']:
         (src, tgt) = f.split(":")
         src = resolve_src(src, modulesd)
-        if src.endswith('*'):
-            for fp in glob(src):
-                tgt2 = os.path.join(rp, fp[1:])
-                bind_mount(fp, tgt2)
-        else:
-            tgt2 = os.path.join(rp, tgt[1:])
-            bind_mount(src, tgt2)
+        for path in glob(src):
+            if path.startswith("/"):
+                path = path[1:]
+            else:
+                continue
+            bind_target = os.path.join(rp, path)
+            log("%s %s" % (src, bind_target))
+            bind_mount(fp, bind_target)
 
 
 def read_confs(mdir):
