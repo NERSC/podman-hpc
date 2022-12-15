@@ -319,10 +319,10 @@ def main():
         shared_run_launch(localid, run_cmd, env)
         
         # wait for container to exist
-        while exitcode(os.system(f"podman --log-level fatal container exists {container_name}")):
+        while exitcode(os.system(f"{conf.podman_bin} --log-level fatal container exists {container_name}")):
             time.sleep(0.2)
         # wait for container to be "running"
-        os.system(f"podman wait --log-level fatal --condition running {container_name} >/dev/null 2>&1")
+        os.system(f"{conf.podman_bin} wait --log-level fatal --condition running {container_name} >/dev/null 2>&1")
         os.execve(exec_cmd[0], exec_cmd, env)
 
     if comm == "run":
