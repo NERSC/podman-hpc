@@ -254,7 +254,7 @@ def shared_run_args(podman_args, image, container_name="hpc",debug=False):
 
 def shared_run_launch(localid, run_cmd, env):
     """ helper to break out of an if block """
-    if localid and localid != 0:
+    if localid and int(localid) != 0:
         return
     pid = os.fork()
     if pid == 0:
