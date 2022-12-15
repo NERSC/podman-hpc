@@ -1,17 +1,19 @@
 #!/usr/bin/python3 -s
 
-import argparse
-import os
 import sys
+import os
 import re
 import time
+import yaml
 from copy import deepcopy
 from .migrate2scratch import MigrateUtils
 import toml
 from shutil import which
 from glob import glob
-import yaml
-
+if sys.version_info < (3, 9):
+    from . import argparse_exit_on_error as argparse
+else:
+    import argparse
 
 _MOD_ENV = "PODMANHPC_MODULES_DIR"
 _HOOKS_ENV = "PODMANHPC_HOOKS_DIR"
