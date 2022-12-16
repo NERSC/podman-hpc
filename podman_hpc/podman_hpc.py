@@ -10,19 +10,21 @@ from .migrate2scratch import MigrateUtils
 import toml
 from shutil import which
 from glob import glob
-if sys.version_info < (3, 9):
-    from . import argparse_exit_on_error as argparse
-else:
+try:
+    from argparse import ArgumentParser as _
+    _ = _(exit_on_error=True)
     import argparse
+except TypeError:
+    from . import argparse_exit_on_error as argparse
+try:
+    from os import waitstatus_to_exitcode
+except ImportError:
+    def waitstatus_to_exitcode(status):
+        return os.WEXITSTATUS(status) if os.WIFEXITED(status) else -1*os.WTERMSIG(status)
 
 _MOD_ENV = "PODMANHPC_MODULES_DIR"
 _HOOKS_ENV = "PODMANHPC_HOOKS_DIR"
 _HOOKS_ANNO = "podman_hpc.hook_tool"
-
-# os.waitstatus_to_exitcode(status) does not exist until python 3.9
-# so we reimplement here for python 3.6
-def exitcode(wait_status):
-    return os.WEXITSTATUS(wait_status) if os.WIFEXITED(wait_status) else -1*os.WTERMSIG(wait_status)
 
 class config:
     """
@@ -325,7 +327,7 @@ def main():
         shared_run_launch(localid, run_cmd, env)
         
         # wait for container to exist
-        while exitcode(os.system(f"{conf.podman_bin} --log-level fatal container exists {container_name}")):
+        while waitstatus_to_exitcode(os.system(f"{conf.podman_bin} --log-level fatal container exists {container_name}")):
             time.sleep(0.2)
         # wait for container to be "running"
         os.system(f"{conf.podman_bin} wait --log-level fatal --condition running {container_name} >/dev/null 2>&1")
