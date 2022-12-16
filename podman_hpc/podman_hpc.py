@@ -216,7 +216,7 @@ def filter_podman_subcommand(podman_bin, subcommand, podman_args):
     return [podman_bin, subcommand] + subcmd_args
 
 
-def shared_run_args(podman_args, image, container_name="hpc",debug=False):
+def shared_run_args(podman_args, image, cmds, container_name="hpc",debug=False):
     """ Construct argument list for `podman run` and `podman exec`
     by filtering flags passed to `podman shared-run` """
     if (debug):
@@ -240,6 +240,7 @@ def shared_run_args(podman_args, image, container_name="hpc",debug=False):
                     "-e", "ENABLE_EXEC_WAIT=1",
                     "--name", container_name
                 ]
+    prun.extend(cmds)
     prun.extend([image, "/usr/bin/exec-wait", "-d"])
     pexec[2:2] = [
         "-e", '"PALS_*"',
@@ -319,8 +320,7 @@ def main():
         localid = os.environ.get(localid_var)
 
         container_name = f"uid-{os.getuid()}-pid-{os.getppid()}"
-        run_cmd, exec_cmd = shared_run_args(podman_args, image, container_name)
-        run_cmd.extend(cmds)
+        run_cmd, exec_cmd = shared_run_args(podman_args, image, cmds, container_name)
 
         shared_run_launch(localid, run_cmd, env)
         
