@@ -161,7 +161,7 @@ def get_params(args):
 
 def read_confs():
 
-    mdir = os.environ.get(_MOD_ENV, f"{sys.prefix}/etc/podman_hpc/modules.d")
+    mdir = os.environ.get(_MOD_ENV, "/etc/podman_hpc/modules.d")
     confs = {}
     for d in glob(f"{mdir}/*.yaml"):
         conf = yaml.load(open(d), Loader=yaml.FullLoader)
@@ -234,6 +234,7 @@ def shared_run_args(podman_args, image, container_name="hpc",debug=False):
                         _HOOKS_ENV, 
                         f"{sys.prefix}/share/containers/oci/hooks.d"
                     ),
+                    "--annotation", "%s=true" % (_HOOKS_ANNO),
                     "--log-level","fatal",
                     "--rm", "-d",
                     "-e", "ENABLE_EXEC_WAIT=1",
@@ -319,6 +320,7 @@ def main():
 
         container_name = f"uid-{os.getuid()}-pid-{os.getppid()}"
         run_cmd, exec_cmd = shared_run_args(podman_args, image, container_name)
+        run_cmd.extend(cmds)
 
         shared_run_launch(localid, run_cmd, env)
         
