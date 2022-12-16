@@ -1,15 +1,21 @@
-#include <algorithm>
 #include <iostream>
-//#include <fstream>
 #include <chrono>
 #include <thread>
 #include <unistd.h>
 #include <limits.h>
-//#include "boost/filesystem.hpp"
-#include <filesystem>
 #include <regex>
 
-namespace fs = std::filesystem;
+#if defined(__cpp_lib_filesystem) \
+  || (defined(__has_include) && __has_include(<filesystem>))
+#   include <filesystem>
+    namespace fs = std::filesystem;
+#elif defined(__cpp_lib_experimental_filesystem) \
+      || (defined(__has_include) && __has_include(<experimental/filesystem>))
+#   include <experimental/filesystem>
+    namespace fs = std::experimental::filesystem;
+#else
+#   error "Could not find <filesystem> or <experimental/filesystem> header!"
+#endif
 
 /**
  * Check for existence of command flags.
