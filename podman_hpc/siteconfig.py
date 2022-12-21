@@ -33,7 +33,10 @@ class SiteConfig:
         self.podman_bin = self.trywhich("podman")
         self.mount_program = self.trywhich("fuse-overlayfs-wrap")
         self.conmon_bin = self.trywhich("conmon")
-        self.runtime = self.trywhich("crun")
+        try:
+            self.runtime = self.trywhich("crun")
+        except OSError:
+            self.runtime = self.trywhich("runc")
         self.options = []
         self.log_level = log_level
 
