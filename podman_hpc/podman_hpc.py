@@ -196,7 +196,7 @@ def shared_run(image, shared_run_args=None):
     localid_var = os.environ.get("PODMANHPC_LOCALID_VAR", "SLURM_LOCALID")
     localid = os.environ.get(localid_var)
 
-container_name = f"uid-{os.getuid()}-pid-{os.getppid()}"
+    container_name = f"uid-{os.getuid()}-pid-{os.getppid()}"
     # run_cmd, exec_cmd = shared_run_args(podman_args,image,cmds,container_name)
     run_cmd = ["podman", "run", "--help"]
     exec_cmd = ["podman", "exec", "--help"]
