@@ -1,15 +1,21 @@
-#include <algorithm>
 #include <iostream>
-//#include <fstream>
 #include <chrono>
 #include <thread>
 #include <unistd.h>
 #include <limits.h>
-//#include "boost/filesystem.hpp"
-#include <filesystem>
 #include <regex>
 
-namespace fs = std::filesystem;
+#if defined(__cpp_lib_filesystem) \
+  || (defined(__has_include) && __has_include(<filesystem>))
+#   include <filesystem>
+    namespace fs = std::filesystem;
+#elif defined(__cpp_lib_experimental_filesystem) \
+      || (defined(__has_include) && __has_include(<experimental/filesystem>))
+#   include <experimental/filesystem>
+    namespace fs = std::experimental::filesystem;
+#else
+#   error "Could not find <filesystem> or <experimental/filesystem> header!"
+#endif
 
 /**
  * Check for existence of command flags.
@@ -57,7 +63,7 @@ std::string readlink2str(std::string const& path)
  * @param user String containing a user to match.
  * @result integer number of processes owned by user.
  */
-int getNumRunningProcess(const std::string& user)
+int getNumRunningProcess(const std::string& user, const bool debug)
 {
   std::string fn;
   int n = 0;
@@ -65,12 +71,13 @@ int getNumRunningProcess(const std::string& user)
   for (fs::directory_iterator pitr("/proc"); pitr!=fs::directory_iterator(); ++pitr)
   {
     fn = pitr->path().filename();
-    if (std::regex_match(fn, std::regex("[(-|+)|][0-9]+")) && readlink2str("/proc/"+fn+"/ns/user") == user)
+    if (std::regex_match(fn, std::regex("[0-9]+")) && readlink2str("/proc/"+fn+"/ns/user") == user)
     { 
       n++;
     }
   }
 
+  if (debug) { std::cout << "        getNumRunningProcess: detected " << n << " processes for user :" << user << std::endl; }
   return n;
 }
 
@@ -86,18 +93,18 @@ int getNumRunningProcess(const std::string& user)
 int main(int argc, char * argv[] )
 {
   std::string user = readlink2str("/proc/self/ns/user");
-  int npid = getNumRunningProcess(user);
   bool debug = cmdOptionExists(argv, argv+argc, "-d");
+  int npid = getNumRunningProcess(user, debug);
 
   if (debug) { std::cout << "Detected " << npid << " running procs for " << user << "at launch." << std::endl; }
 
-  while ( getNumRunningProcess(user) == npid ) 
+  while ( getNumRunningProcess(user, debug) == npid ) 
   {
     if (debug) { std::cout << "... waiting for additional processes to start" << std::endl; }
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
   }
 
-  while ( npid < getNumRunningProcess(user) )
+  while ( npid < getNumRunningProcess(user, debug) )
   {
     if (debug) { std::cout << "... waiting for additional processes to finish" << std::endl; }
     std::this_thread::sleep_for(std::chrono::milliseconds(100));

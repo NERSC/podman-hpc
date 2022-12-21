@@ -1,12 +1,19 @@
 #!/usr/bin/env python
-import os
+
 import sys
+import os
 import re
+import time
 import click
 from . import click_passthrough as cpt
 from .migrate2scratch import MigrateUtils
 from .siteconfig import SiteConfig
         
+try:
+    from os import waitstatus_to_exitcode
+except ImportError:
+    def waitstatus_to_exitcode(status):
+        return os.WEXITSTATUS(status) if os.WIFEXITED(status) else -1*os.WTERMSIG(status)
 
 # function to specify help message formatting to mimic the podman help page.
 # follows the style of click.Command.format_help()
@@ -145,27 +152,30 @@ def shared_run(image,shared_run_args=None):
     """
     click.echo(f"Launching a shared-run with args: {shared_run_args}")
 
-    localid_var = os.environ.get("PODMAN_HPC_LOCALID_VAR","SLURM_LOCALID")
+    localid_var = os.environ.get("PODMANHPC_LOCALID_VAR","SLURM_LOCALID")
     localid = os.environ.get(localid_var)
 
     container_name = f"uid-{os.getuid()}-pid-{os.getppid()}"
-    #run_cmd, exec_cmd = shared_run_args(podman_args,image,container_name)
+    #run_cmd, exec_cmd = shared_run_args(podman_args,image,cmds,container_name)
     run_cmd = ['podman','run','--help']
     exec_cmd = ['podman','exec','--help']
     
-    shared_run_launch(localid,run_cmd,os.environ)
+    shared_run_launch(localid,run_cmd,env)
+    # wait for container to exist
+    while waitstatus_to_exitcode(os.system(f"{conf.podman_bin} --log-level fatal container exists {container_name}")):
+        time.sleep(0.2)
+    # wait for container to be "running"
+    os.system(f"{conf.podman_bin} wait --log-level fatal --condition running {container_name} >/dev/null 2>&1")
+    os.execve(exec_cmd[0], exec_cmd, env)
 
-    # wait for the named container to start (maybe convert this to python instead of bash)
-    os.system(f'while [ $(podman --log-level fatal ps -a | grep {container_name} | grep -c Up) -eq 0 ] ; do sleep 0.2')
-    os.execve(exec_cmd[0], exec_cmd, os.environ)
 
-def shared_run_launch(localid,run_cmd,env):
+def shared_run_launch(localid, run_cmd, env):
     """ helper to break out of an if block """
-    if localid and int(localid)!=0:
+    if localid and int(localid) != 0:
         return
     pid = os.fork()
-    if pid==0:
-        os.execve(run_cmd[0],run_cmd,env)
+    if pid == 0:
+        os.execve(run_cmd[0], run_cmd, env)
     return pid
 
 

@@ -1,0 +1,8 @@
+name: exec-wait
+cli_arg: exec-wait
+hidden: True
+help: Enable exec-wait binary for shared-run mode.
+env: ENABLE_EXEC_WAIT
+copy: []
+bind:
+  - ../../../bin/exec-wait:/usr/bin/exec-wait

@@ -5,7 +5,7 @@ env: ENABLE_GPU
 additional_args:
   - -e NVIDIA_VISIBLE_DEVICES
 copy:
-  - /etc/podman_hpc/01-gpu.conf:/etc/ld.so.conf.d/01-gpu.conf
+  - ../01-gpu.conf:/etc/ld.so.conf.d/01-gpu.conf
   - /usr/lib64/libnvcuvid.so:/usr/lib64/libnvcuvid.so
   - /usr/lib64/libnvcuvid.so.1:/usr/lib64/libnvcuvid.so.1
   - /usr/lib64/libnvcuvid.so.515.48.07:/usr/lib64/libnvcuvid.so.515.48.07

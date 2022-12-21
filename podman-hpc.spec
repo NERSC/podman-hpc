@@ -13,9 +13,6 @@
 # published by the Open Source Initiative.
 
 
-%global modname podman_hpc                                                           1
-
-
 Name:           podman-hpc
 Version:        1.0.0
 Release:        1
@@ -23,7 +20,7 @@ Summary:	Scripts to enable Podman to run in an HPC environment
 # FIXME: Select a correct license from https://github.com/openSUSE/spec-cleaner#spdx-licenses
 License:        Apache 2.0 
 URL:            https://github.com/nersc/podman-hpc 
-Source:         podman-hpc-1.0.0.tar.gz
+Source:         %{name}-%{version}.tar.gz
 BuildRequires:  python3
 Requires:	python3-toml
 
@@ -46,16 +43,14 @@ run fully unprivileged.
 %files
 %license LICENSE
 %doc CHANGELOG.md README.md
-%config /etc/podman_hpc/modules.d
-%config /etc/podman_hpc/01-gpu.conf
-%config /etc/podman_hpc/02-mpich.conf
+%config /etc/podman_hpc
+%config /usr/etc/podman_hpc
 /usr/bin/podman-hpc
 /usr/bin/hook_tool
 /usr/bin/fuse-overlayfs-wrap
-%{python3_sitelib}
-#%{python3_sitelib}/%{modname}-%{version}*
+/usr/bin/exec-wait
+%{python3_sitelib}/podman_hpc*
 /usr/share/containers/oci/hooks.d/02-hook_tool.json
 
-
 %changelog
-
+#

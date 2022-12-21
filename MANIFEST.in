@@ -1,0 +1,9 @@
+include *.spec
+include *.md
+include Makefile
+include exec-wait.cpp
+include rpmsrcprep.sh
+include test/*.json
+graft test/modules.d
+graft test/storage
+graft extra
