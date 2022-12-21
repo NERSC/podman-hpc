@@ -196,12 +196,15 @@ def shared_run(image, shared_run_args=None):
     localid_var = os.environ.get("PODMANHPC_LOCALID_VAR", "SLURM_LOCALID")
     localid = os.environ.get(localid_var)
 
-    container_name = f"uid-{os.getuid()}-pid-{os.getppid()}"
+container_name = f"uid-{os.getuid()}-pid-{os.getppid()}"
     # run_cmd, exec_cmd = shared_run_args(podman_args,image,cmds,container_name)
     run_cmd = ["podman", "run", "--help"]
     exec_cmd = ["podman", "exec", "--help"]
 
-    shared_run_launch(localid, run_cmd, env)
+    # start container with `podman run ...`
+    if (localid is None or int(localid) == 0) and os.fork():
+        os.execve(run_cmd[0], run_cmd, env)
+    
     # wait for container to exist
     while waitstatus_to_exitcode(
         os.system(
@@ -209,21 +212,14 @@ def shared_run(image, shared_run_args=None):
         )
     ):
         time.sleep(0.2)
+        
     # wait for container to be "running"
     os.system(
         f"{conf.podman_bin} wait --log-level fatal --condition running {container_name} >/dev/null 2>&1"
     )
+    
+    # launch cmd in container with `podman exec ...`
     os.execve(exec_cmd[0], exec_cmd, env)
-
-
-def shared_run_launch(localid, run_cmd, env):
-    """helper to break out of an if block"""
-    if localid and int(localid) != 0:
-        return
-    pid = os.fork()
-    if pid == 0:
-        os.execve(run_cmd[0], run_cmd, env)
-    return pid
 
 
 ### podman-hpc call_podman subcommand (default, hidden, passthrough) #########
