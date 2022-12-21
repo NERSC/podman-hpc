@@ -27,6 +27,9 @@ class SiteConfig:
         self.squash_dir = squash_dir or os.environ.get(
             "SQUASH_DIR", f'{os.environ["SCRATCH"]}/storage'
         )
+        self.modules_dir = os.environ.get(
+            _MOD_ENV, "/etc/podman_hpc/modules.d"
+        )
         self.podman_bin = self.trywhich("podman")
         self.mount_program = self.trywhich("fuse-overlayfs-wrap")
         self.conmon_bin = self.trywhich("conmon")
@@ -127,13 +130,17 @@ class SiteConfig:
     ):
         self._write_conf(filename, self.container_conf, overwrite=overwrite)
 
-    def get_cmd_extensions(self, subcommand, args, modules_dir):
-        cmds = [
-            "-e",
-            f"{_MOD_ENV}={modules_dir}",
-            "--annotation",
-            f"{_HOOKS_ANNO}=true",
-        ]
+    def get_cmd_extensions(self, subcommand, args):
+        cmds = []
+        if subcommand == "run":
+            cmds.extend(
+                [
+                    "-e",
+                    f"{_MOD_ENV}={self.modules_dir}",
+                    "--annotation",
+                    f"{_HOOKS_ANNO}=true",
+                ]
+            )
         for mod, mconf in self.sitemods.get(subcommand, {}).items():
             cli_arg = mconf["cli_arg"].replace("-", "_")
             if args.get(cli_arg, False):
@@ -149,9 +156,8 @@ class SiteConfig:
     # to parse appropriately.  This would allow adding site-specific default
     # flags for any podman subcommand.
     def read_site_modules(self):
-        mdir = os.environ.get(_MOD_ENV, "/etc/podman_hpc/modules.d")
         mods = {}
-        for modfile in glob(f"{mdir}/*.yaml"):
+        for modfile in glob(f"{self.modules_dir}/*.yaml"):
             mod = yaml.load(open(modfile), Loader=yaml.FullLoader)
             mods[mod["name"]] = mod
         self.sitemods = {"run": mods}
