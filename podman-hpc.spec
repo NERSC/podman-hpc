@@ -22,7 +22,9 @@ License:        Apache 2.0
 URL:            https://github.com/nersc/podman-hpc 
 Source:         %{name}-%{version}.tar.gz
 BuildRequires:  python3
-Requires:	python3-toml
+Requires:       podman
+Requires:       python3-toml
+Requires:       python3-click
 
 %description
 Podman-hpc is a set of scripts around podman to enable it to work
