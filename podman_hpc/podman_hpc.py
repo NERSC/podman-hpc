@@ -1,21 +1,30 @@
 #!/usr/bin/python3 -s
 
-import argparse
-import os
 import sys
+import os
 import re
+import time
+import yaml
 from copy import deepcopy
 from .migrate2scratch import MigrateUtils
 import toml
 from shutil import which
 from glob import glob
-import yaml
-
+try:
+    from argparse import ArgumentParser as _
+    _ = _(exit_on_error=True)
+    import argparse
+except TypeError:
+    from . import argparse_exit_on_error as argparse
+try:
+    from os import waitstatus_to_exitcode
+except ImportError:
+    def waitstatus_to_exitcode(status):
+        return os.WEXITSTATUS(status) if os.WIFEXITED(status) else -1*os.WTERMSIG(status)
 
 _MOD_ENV = "PODMANHPC_MODULES_DIR"
 _HOOKS_ENV = "PODMANHPC_HOOKS_DIR"
 _HOOKS_ANNO = "podman_hpc.hook_tool"
-
 
 class config:
     """
@@ -113,7 +122,7 @@ def config_containers(conf, args, confs, modules_dir):
     cmds = ["-e", "%s=%s" % (_MOD_ENV, modules_dir)]
     cmds.extend(["--annotation", "%s=true" % (_HOOKS_ANNO)])
     for mod, mconf in confs.items():
-        cli_arg = mconf["cli_arg"]
+        cli_arg = mconf["cli_arg"].replace('-','_')
         if vars(args).get(cli_arg):
             cmds.extend(mconf.get("additional_args", []))
             cmds.extend(["-e", "%s=1" % (mconf["env"])])
@@ -154,7 +163,7 @@ def get_params(args):
 
 def read_confs():
 
-    mdir = os.environ.get(_MOD_ENV, f"{sys.prefix}/etc/podman_hpc/modules.d")
+    mdir = os.environ.get(_MOD_ENV, "/etc/podman_hpc/modules.d")
     confs = {}
     for d in glob(f"{mdir}/*.yaml"):
         conf = yaml.load(open(d), Loader=yaml.FullLoader)
@@ -174,7 +183,7 @@ def filter_podman_subcommand(podman_bin, subcommand, podman_args):
     for a given podman subcommand based on its --help text. """
     # extract valid flags from subcommand help text, and populate an arg parser
     opt_regex = re.compile(r"^\s*(?:(-\w), )?(--\w[\w\-]+)(?:\s(\w+))?")
-    p = argparse.ArgumentParser(exit_on_error=False)
+    p = argparse.ArgumentParser(exit_on_error=False,add_help=False)
     with os.popen(" ".join([podman_bin, subcommand, "--help"])) as f:
         for line in f:
             opt = opt_regex.match(line)
@@ -209,40 +218,51 @@ def filter_podman_subcommand(podman_bin, subcommand, podman_args):
     return [podman_bin, subcommand] + subcmd_args
 
 
-def shared_run_args(podman_args, image, container_name="hpc"):
+def shared_run_args(podman_args, image, cmds, container_name="hpc",debug=False):
     """ Construct argument list for `podman run` and `podman exec`
     by filtering flags passed to `podman shared-run` """
-    print("calling shared_run_args with podman_args:")
-    print(f"\t{podman_args}")
+    if (debug):
+        print("calling shared_run_args with input podman_args:")
+        print(f"\t{podman_args}")
 
     # generate valid subcommands from the given podman_args
-    prun = filter_podman_subcommand(podman_args[0], "run", podman_args)
-    pexec = filter_podman_subcommand(podman_args[0], "exec", podman_args)
+    ind_img = podman_args.index(image)
+    prun = filter_podman_subcommand(podman_args[0], "run", podman_args[:ind_img])
+    pexec = filter_podman_subcommand(podman_args[0], "exec", podman_args[:ind_img])
 
-    prun[2:2] = ["--rm", "-d", "--exec-wait", "--name", container_name]
-    prun.extend([image, "/bin/exec-wait"])
+    prun[2:2] = [
+                    "--hooks-dir",
+                    os.environ.get(
+                        _HOOKS_ENV, 
+                        f"{sys.prefix}/share/containers/oci/hooks.d"
+                    ),
+                    "--annotation", "%s=true" % (_HOOKS_ANNO),
+                    "--log-level","fatal",
+                    "--rm", "-d",
+                    "-e", "ENABLE_EXEC_WAIT=1",
+                    "--name", container_name
+                ]
+    prun.extend(cmds)
+    prun.extend([image, "/usr/bin/exec-wait", "-d"])
     pexec[2:2] = [
-        "-e",
-        '"PALS_*"',
-        "-e",
-        '"PMI_*"',
-        "-e",
-        '"SLURM_*"',
-        "--log-level",
-        "fatal",
+        "-e", '"PALS_*"',
+        "-e", '"PMI_*"',
+        "-e", '"SLURM_*"',
+        "--log-level", "fatal",
     ]
     pexec.extend([container_name])
-    pexec.extend(podman_args[podman_args.index(image)+1:])
+    pexec.extend(podman_args[ind_img+1:])
 
-    print(f"podman run command:\n\t{prun}")
-    print(f"podman exec command:\n\t{pexec}")
+    if (debug):
+        print(f"will execute podman run command:\n\t{prun}")
+        print(f"will execute podman exec command:\n\t{pexec}")
 
     return prun, pexec
 
 
 def shared_run_launch(localid, run_cmd, env):
     """ helper to break out of an if block """
-    if localid and localid != 0:
+    if localid and int(localid) != 0:
         return
     pid = os.fork()
     if pid == 0:
@@ -302,18 +322,16 @@ def main():
         localid = os.environ.get(localid_var)
 
         container_name = f"uid-{os.getuid()}-pid-{os.getppid()}"
-        run_cmd, exec_cmd = shared_run_args(podman_args, image, container_name)
+        run_cmd, exec_cmd = shared_run_args(podman_args, image, cmds, container_name)
 
-        shared_run_launch(localid, run_cmd, os.environ)
-
-        # wait for the named container to start
-        # (maybe convert this to python instead of bash)
-        os.system(
-                "while [ $(podman --log-level fatal ps -a |"
-                f"grep {container_name} | grep -c Up) -eq 0 ] ; "
-                "do sleep 0.2"
-        )
-        os.execve(exec_cmd[0], exec_cmd, os.environ)
+        shared_run_launch(localid, run_cmd, env)
+        
+        # wait for container to exist
+        while waitstatus_to_exitcode(os.system(f"{conf.podman_bin} --log-level fatal container exists {container_name}")):
+            time.sleep(0.2)
+        # wait for container to be "running"
+        os.system(f"{conf.podman_bin} wait --log-level fatal --condition running {container_name} >/dev/null 2>&1")
+        os.execve(exec_cmd[0], exec_cmd, env)
 
     if comm == "run":
         ind = podman_args.index("run")

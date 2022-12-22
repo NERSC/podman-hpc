@@ -238,18 +238,20 @@ class MigrateUtils():
         If dst isn't provided, then default to the values of the
         SQUASH_DIR environment variable.
         """
-        if src:
-            self.src_dir = src
-        else:
-            self.src_dir = self._get_paths()
-        self.src = ImageStore(self.src_dir)
-        if dst:
-            self.dst_dir = dst
-        else:
-            self.dst_dir = os.environ["SQUASH_DIR"]
-        self.dst = ImageStore(self.dst_dir, read_only=False)
+        self.src_dir = src
+        self.dst_dir = dst
+        self._lazy_init_called = False
 
-    def _get_paths(self):
+    def _lazy_init(self):
+        if not self._lazy_init_called:
+            self.src_dir = self.src_dir or self._get_paths()
+            self.src = ImageStore(self.src_dir)
+            self.dst_dir = self.dst_dir or os.environ["SQUASH_DIR"]
+            self.dst = ImageStore(self.dst_dir)
+            self._lazy_init_called = True
+
+    @staticmethod
+    def _get_paths():
         """
         Helper function to lookup the default image store.
         """
@@ -271,7 +273,6 @@ class MigrateUtils():
         Inputs:
         imgid: Image ID
         """
-
         def _add_parent(layer, layers, by_id, layer_ids):
             """
             Recrusive function to walk up parent graph.
@@ -395,6 +396,7 @@ class MigrateUtils():
         return True
 
     def migrate_image(self, image):
+        self._lazy_init()
         logging.debug(f"Migrating {image}")
         self.dst.init_storage()
         self.src.refresh()
@@ -447,6 +449,7 @@ class MigrateUtils():
         return True
 
     def remove_image(self, image):
+        self._lazy_init()
         logging.debug(f"Removing {image}")
         self.dst.refresh()
         img_info, _ = self.dst.get_img_info(image)

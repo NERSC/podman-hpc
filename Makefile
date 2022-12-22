@@ -1,13 +1,15 @@
 .PHONY: clean setuptools-build_py build rpmbuild-install install
 
 DOCDIR=$(DESTDIR)/usr/share/doc/packages/podman-hpc
+CC?=g++
 
+all: build
 
 clean:
-	rm -rf dist build *.egg-info MANIFEST bin/exec-wait
+	rm -rf dist build *.egg-info MANIFEST bin/exec-wait podman_hpc/*.pyc podman_hpc/__pycache__
 
 setuptools-build_py:
-	g++ -std=c++17 -static -o bin/exec-wait exec-wait.cpp
+	CC -o bin/exec-wait exec-wait.cpp -std=c++17 -static -lstdc++fs
 
 build: setuptools-build_py
 
