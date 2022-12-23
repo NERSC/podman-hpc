@@ -1,3 +1,4 @@
+import sys
 import os
 import shutil
 import toml
@@ -138,6 +139,11 @@ class SiteConfig:
         if subcommand == "run":
             cmds.extend(
                 [
+                    "--hooks-dir",
+                    os.environ.get(
+                        _HOOKS_ENV,
+                        f"{sys.prefix}/share/containers/oci/hooks.d",
+                    ),
                     "-e",
                     f"{_MOD_ENV}={self.modules_dir}",
                     "--annotation",
@@ -163,4 +169,4 @@ class SiteConfig:
         for modfile in glob(f"{self.modules_dir}/*.yaml"):
             mod = yaml.load(open(modfile), Loader=yaml.FullLoader)
             mods[mod["name"]] = mod
-        self.sitemods = {"run": mods}
+        self.sitemods = {"run": mods, "shared-run": mods}

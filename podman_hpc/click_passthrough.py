@@ -1,10 +1,18 @@
 import sys
+import os
 import re
 import click
 import warnings
 import inspect
 import typing as t
 import functools
+
+try:
+    from argparse import ArgumentParser as _
+    _ = _(exit_on_error=True)
+    import argparse
+except TypeError:
+    from . import argparse_exit_on_error as argparse
 
 class DefaultCommandGroup(click.Group):
     def __init__(self,*args, hide_default=False, **attrs):
@@ -161,5 +169,47 @@ class PassthroughGroup(DefaultCommandGroup):
 def parametersFromPassthrough(cmd,passthrough):
     pass
 
-def filterValidSubcommand(subcmd,argstr):
-    pass
+def filterValidOptions(options,subcmd,option_regex=None):
+    """ Filter invalid arguments from an argument list
+    for a given subcommand based on its --help text. """
+    if not option_regex:
+        option_regex = re.compile(r"^\s*(?:(-\w), )?(--\w[\w\-]+)(?:\s(\w+))?")
+    
+    # create a dummy parser and populate it with valid option flags
+    p = argparse.ArgumentParser(exit_on_error=False,add_help=False)
+    with os.popen(" ".join(subcmd)) as f:
+        for line in f:
+            opt = option_regex.match(line)
+            if opt:
+                action = "store" if opt.groups()[2] else "store_true"
+                flags = [flag for flag in opt.groups()[:-1] if flag]
+                p.add_argument(*flags, action=action)
+    
+    # remove unknown options from the given options
+    valid_options = options.copy()
+    unknowns = p.parse_known_args(valid_options)[1]
+    # some args may match unknowns but actually be valid because they 
+    # provide a value for a valid flag, store these "safe" indices here
+    uk_safe_index = {}
+    # iterate until we've accounted for all the unknown options
+    while unknowns:
+        ukd = {}  # candidate indices of where to remove unknowns
+        for uk in set(unknowns):
+            ukd[uk] = [
+                idx
+                for idx, opt in enumerate(valid_options)
+                if (opt == uk and idx not in uk_safe_index.get(uk, []))
+            ]
+        uk = unknowns.pop(0)
+        # find and remove an invalid occurence of uk
+        while True:
+            valid_options_tmp = valid_options.copy()
+            valid_options_tmp.pop(ukd[uk][0])
+            try:
+                if p.parse_known_args(valid_options_tmp)[1] == unknowns:
+                    valid_options.pop(ukd[uk][0])
+                    break
+            except argparse.ArgumentError:
+                pass
+            uk_safe_index.setdefault(uk, []).append(ukd[uk].pop(0))
+    return valid_options
