@@ -12,12 +12,14 @@ from .siteconfig import SiteConfig
 try:
     from os import waitstatus_to_exitcode
 except ImportError:
+
     def waitstatus_to_exitcode(status):
         return (
             os.WEXITSTATUS(status)
             if os.WIFEXITED(status)
             else -1 * os.WTERMSIG(status)
         )
+
 
 # function to specify help message formatting to mimic the podman help page.
 # follows the style of click.Command.format_help()
@@ -100,8 +102,8 @@ def podhpc(ctx, additional_stores, squash_dir, update_conf, log_level):
     conf.export_storage_conf(overwrite=overwrite)
 
     # add appropriate flags to call_podman based on invoked subcommand
-    #defcmd = ctx.command.default_command_fn
-    invcmd = ctx.command.get_command(ctx,ctx.invoked_subcommand)
+    # defcmd = ctx.command.default_command_fn
+    invcmd = ctx.command.get_command(ctx, ctx.invoked_subcommand)
     for k, v in conf.sitemods.get(ctx.invoked_subcommand, {}).items():
         invcmd = click.option(
             f"--{v['cli_arg']}",
@@ -191,36 +193,42 @@ def shared_run(conf, image, container_cmd, **site_opts):
       podman-hpc run --help
       podman-hpc exec --help
     """
-    #click.echo(f"Launching a shared-run with args: {sys.argv}")
+    # click.echo(f"Launching a shared-run with args: {sys.argv}")
 
     localid_var = os.environ.get("PODMANHPC_LOCALID_VAR", "SLURM_LOCALID")
     localid = os.environ.get(localid_var)
     container_name = f"uid-{os.getuid()}-pid-{os.getppid()}"
 
     # construct run and exec commands from user options
-    options = sys.argv[sys.argv.index("shared-run")+1:sys.argv.index(image)]
-    site_opts["exec_wait"]=True
+    options = sys.argv[
+        sys.argv.index("shared-run") + 1 : sys.argv.index(image)
+    ]
+    site_opts["exec_wait"] = True
 
-    run_cmd = [
-        conf.podman_bin, "run",
-        "--rm", "-d",
-        "--name", container_name
-    ]
-    run_cmd.extend(cpt.filterValidOptions(options,[conf.podman_bin,"run","--help"]))
-    run_cmd.extend(conf.get_cmd_extensions("run",site_opts))
+    run_cmd = [conf.podman_bin, "run", "--rm", "-d", "--name", container_name]
+    run_cmd.extend(
+        cpt.filterValidOptions(options, [conf.podman_bin, "run", "--help"])
+    )
+    run_cmd.extend(conf.get_cmd_extensions("run", site_opts))
     run_cmd.extend([image, "/usr/bin/exec-wait", "-d"])
-    
+
     exec_cmd = [
-        conf.podman_bin, "exec",
-        "-e", '"PALS_*"',
-        "-e", '"PMI_*"',
-        "-e", '"SLURM_*"',
+        conf.podman_bin,
+        "exec",
+        "-e",
+        '"PALS_*"',
+        "-e",
+        '"PMI_*"',
+        "-e",
+        '"SLURM_*"',
     ]
-    exec_cmd.extend(cpt.filterValidOptions(options,[conf.podman_bin,"exec","--help"]))
+    exec_cmd.extend(
+        cpt.filterValidOptions(options, [conf.podman_bin, "exec", "--help"])
+    )
     exec_cmd.extend([container_name] + list(container_cmd))
 
-    #click.echo(f"run_cmd is: {run_cmd}")
-    #click.echo(f"exec_cmd is: {exec_cmd}")
+    # click.echo(f"run_cmd is: {run_cmd}")
+    # click.echo(f"exec_cmd is: {exec_cmd}")
 
     # start container with `podman run ...`
     if (localid is None or int(localid) == 0) and os.fork():
@@ -239,7 +247,7 @@ def shared_run(conf, image, container_cmd, **site_opts):
     # launch cmd in container with `podman exec ...`
     os.execve(exec_cmd[0], exec_cmd, conf.env)
 
-    
+
 ### podman-hpc call_podman subcommand (default, hidden, passthrough) #########
 @podhpc.default_command(
     context_settings=dict(ignore_unknown_options=True, help_option_names=[]),
@@ -254,8 +262,8 @@ def call_podman(ctx, siteconf, help, podman_args, **site_opts):
     cmd.extend(siteconf.get_cmd_extensions(ctx.info_name, site_opts))
     cmd.extend(podman_args)
 
-    #click.echo("will call:")
-    #click.echo(cmd)
+    # click.echo("will call:")
+    # click.echo(cmd)
 
     # if the help flag is called, we pass podman's STDOUT stream through a pipe
     # to a stream editor, to inject additional help page info

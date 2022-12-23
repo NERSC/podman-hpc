@@ -12,12 +12,14 @@ from shutil import copyfile
 
 _MOD_ENV = "PODMANHPC_MODULES_DIR"
 
-_libc = ctypes.CDLL(ctypes.util.find_library('c'), use_errno=True)
-_libc.mount.argtypes = (ctypes.c_char_p,
-                        ctypes.c_char_p,
-                        ctypes.c_char_p,
-                        ctypes.c_ulong,
-                        ctypes.c_char_p)
+_libc = ctypes.CDLL(ctypes.util.find_library("c"), use_errno=True)
+_libc.mount.argtypes = (
+    ctypes.c_char_p,
+    ctypes.c_char_p,
+    ctypes.c_char_p,
+    ctypes.c_ulong,
+    ctypes.c_char_p,
+)
 logger = None
 
 
@@ -53,7 +55,7 @@ def bind_mount(src, tgt):
 def ldconfig():
     if not os.path.exists("/sbin/ldconfig"):
         return
-    log(subprocess.check_output(["/bin/ls"]).decode('utf-8'))
+    log(subprocess.check_output(["/bin/ls"]).decode("utf-8"))
     ret = "unknown"
     try:
         ret = subprocess.check_output(["/sbin/ldconfig"])
@@ -62,7 +64,7 @@ def ldconfig():
         log(ret)
 
 
-def resolve_src(src, modulesd=os.path.abspath('')):
+def resolve_src(src, modulesd=os.path.abspath("")):
     if not os.path.isabs(src):
         src = os.path.join(modulesd, src)
     return os.path.abspath(os.path.expandvars(src))
@@ -71,7 +73,7 @@ def resolve_src(src, modulesd=os.path.abspath('')):
 def do_plugin(rp, mod, modulesd):
     log(mod)
     log(rp)
-    for f in mod['copy']:
+    for f in mod["copy"]:
         (src, tgt) = f.split(":")
         src = resolve_src(src, modulesd)
         tgt2 = os.path.join(rp, tgt[1:])
@@ -82,10 +84,10 @@ def do_plugin(rp, mod, modulesd):
         if not os.path.exists(tgt_dir):
             os.makedirs(tgt_dir)
         copyfile(src, tgt2, follow_symlinks=False)
-    for f in mod['bind']:
+    for f in mod["bind"]:
         (src, tgt) = f.split(":")
         src = resolve_src(src, modulesd)
-        if src.endswith('*'):
+        if src.endswith("*"):
             for fp in glob(src):
                 tgt2 = os.path.join(rp, fp[1:])
                 bind_mount(fp, tgt2)
@@ -98,7 +100,7 @@ def read_confs(mdir):
     confs = {}
     for d in glob(f"{mdir}/*.yaml"):
         conf = yaml.load(open(d), Loader=yaml.FullLoader)
-        confs[conf['name']] = conf
+        confs[conf["name"]] = conf
     return confs
 
 
@@ -106,15 +108,16 @@ def main():
     global logger
 
     inp = json.load(sys.stdin)
-    pid = inp['pid']
+    pid = inp["pid"]
     cf = json.load(open("config.json"))
     cf_env = {}
-    for e in cf['process']['env']:
+    for e in cf["process"]["env"]:
         k, v = e.split("=", maxsplit=1)
         cf_env[k] = v
 
-    plug_conf_fn = cf_env.get(_MOD_ENV,
-                                  f"{sys.prefix}/etc/podman_hpc/modules.d")
+    plug_conf_fn = cf_env.get(
+        _MOD_ENV, f"{sys.prefix}/etc/podman_hpc/modules.d"
+    )
     plug_conf = read_confs(plug_conf_fn)
 
     lf = cf_env.get("LOG_PLUGIN")
@@ -128,7 +131,7 @@ def main():
     setns(pid, "mnt")
     os.chroot("/")
     for m in plug_conf:
-        if plug_conf[m]['env'] in cf_env:
+        if plug_conf[m]["env"] in cf_env:
             log("Loading %s" % (m))
             do_plugin(rp, plug_conf[m], plug_conf_fn)
     ret = os.chroot(rp)
