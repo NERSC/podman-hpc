@@ -7,10 +7,8 @@ all: build
 clean:
 	rm -rf dist build *.egg-info MANIFEST bin/exec-wait podman_hpc/*.pyc podman_hpc/__pycache__
 
-setuptools-build_py:
-	g++ -o bin/exec-wait exec-wait.cpp -std=c++17 -static -lstdc++fs
-
-build: setuptools-build_py
+build:
+	echo "Nothing to do"
 
 rpmbuild-install: 
 	python3 -m setup install --root=$(DESTDIR) --prefix=/usr
