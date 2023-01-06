@@ -24,11 +24,12 @@ def merge_recs(recs_list, key):
     return res
 
 
-class ImageStore():
+class ImageStore:
     """
     Class to provide some basic functions for interacting with
     an image store.
     """
+
     images = []
     layers = []
 
@@ -71,7 +72,7 @@ class ImageStore():
                 logging.debug("Found by ID")
                 return img, img["id"]
         if ":" not in img_name:
-            img_name = f'{img_name}:latest'
+            img_name = f"{img_name}:latest"
         prefs = ["", "docker.io/", "docker.io/library/", "localhost/"]
         for pref in prefs:
             long_name = f"{pref}{img_name}"
@@ -124,7 +125,7 @@ class ImageStore():
         id: Image ID
         """
         for img in self.images:
-            if img['id'] == id:
+            if img["id"] == id:
                 return True
         return False
 
@@ -168,13 +169,13 @@ class ImageStore():
 
         data = self.images
         for img in data:
-            if img['id'] == id:
+            if img["id"] == id:
                 nnames = []
-                for name in img['names']:
+                for name in img["names"]:
                     if name == image:
                         name = ":".join(image.split(":")[:-1])
                     nnames.append(name)
-                img['names'] = nnames
+                img["names"] = nnames
         json.dump(data, open(self.images_json, "w"))
         self.images = data
 
@@ -219,10 +220,11 @@ class ImageStore():
         return open(lf).read()
 
 
-class MigrateUtils():
+class MigrateUtils:
     """
     Utility to migrate/copy images from one image store to another.
     """
+
     src = None
     dst = None
     images = None
@@ -262,7 +264,7 @@ class MigrateUtils():
                     continue
                 if "graphroot" in line:
                     val = line.rstrip().split("=")[1]
-                    p = val.replace(" ", "").replace("\"", "")
+                    p = val.replace(" ", "").replace('"', "")
         return p
 
     def _get_img_layers(self, store, imgid):
@@ -273,6 +275,7 @@ class MigrateUtils():
         Inputs:
         imgid: Image ID
         """
+
         def _add_parent(layer, layers, by_id, layer_ids):
             """
             Recrusive function to walk up parent graph.
@@ -283,10 +286,10 @@ class MigrateUtils():
             by_id: dictionary of layers by ID
             layer_ids: accumulated dictionary of layers by ID
             """
-            if 'parent' in layer and layer['parent'] not in layer_ids:
-                parent = by_id[layer['parent']]
+            if "parent" in layer and layer["parent"] not in layer_ids:
+                parent = by_id[layer["parent"]]
                 layers.append(parent)
-                layer_ids.add(parent['id'])
+                layer_ids.add(parent["id"])
                 _add_parent(parent, layers, by_id, layer_ids)
 
         by_digest = {}
@@ -301,9 +304,9 @@ class MigrateUtils():
         md = store.get_manifest(imgid)
         layers = []
         layer_ids = set()
-        for layer in md['layers']:
-            ld = by_digest[layer['digest']]
-            layer_ids.add(ld['id'])
+        for layer in md["layers"]:
+            ld = by_digest[layer["digest"]]
+            layer_ids.add(ld["id"])
             _add_parent(ld, layers, by_id, layer_ids)
             layers.append(ld)
 
@@ -373,13 +376,21 @@ class MigrateUtils():
         # To make the squash file we will start up a container
         # with the tgt image and then run mksq in it.
         com = [
-            "podman", "run", "--rm",
-            "-v", f"{_mksqstatic}:/mksq",
-            "-v", "%s/overlay/l/:/sqout" % (self.dst.base),
-            "--entrypoint", "/mksq",
+            "podman",
+            "run",
+            "--rm",
+            "-v",
+            f"{_mksqstatic}:/mksq",
+            "-v",
+            "%s/overlay/l/:/sqout" % (self.dst.base),
+            "--entrypoint",
+            "/mksq",
             img_id,
-            "/", f"/sqout/{ln}.squash", "-comp", "lz4"
-            ]
+            "/",
+            f"/sqout/{ln}.squash",
+            "-comp",
+            "lz4",
+        ]
         # Exclude these
         for ex in ["/sqout", "/mksq", "/proc", "/sys"]:
             com.extend(["-e", ex])
@@ -388,8 +399,8 @@ class MigrateUtils():
 
         if proc.returncode != 0:
             logging.error("Squash Failed")
-            logging.error(out.decode('utf-8'))
-            logging.error(err.decode('utf-8'))
+            logging.error(out.decode("utf-8"))
+            logging.error(err.decode("utf-8"))
             return False
 
         logging.info("Created squash image")
@@ -408,12 +419,12 @@ class MigrateUtils():
             logging.error("Image %s not found\n" % (image))
             return False
 
-        img_id = img_info['id']
+        img_id = img_info["id"]
         # Get the layers from the manifest
         rld = self._get_img_layers(self.src, img_id)
 
         # make sure the src squash file exist
-        top_id = rld[-1]['id']
+        top_id = rld[-1]["id"]
         logging.debug(f"Reading link: {top_id}")
 
         if self.dst.chk_image(img_id):
@@ -424,9 +435,9 @@ class MigrateUtils():
         dimg = None
         if fullname:
             dimg, _ = self.dst.get_img_info(fullname)
-        if dimg and dimg['id'] != img_info['id']:
+        if dimg and dimg["id"] != img_info["id"]:
             logging.info("Replace previous version")
-            self.dst.drop_tag(image, dimg['id'])
+            self.dst.drop_tag(image, dimg["id"])
 
         # Copy image info
         self._copy_image_info(img_id)
@@ -456,12 +467,12 @@ class MigrateUtils():
         if not img_info:
             logging.error("Image {image} not found\n")
             return False
-        img_id = img_info['id']
+        img_id = img_info["id"]
         # Get the layers from the manifest
         rld = self._get_img_layers(self.dst, img_id)
 
         # make sure the src squash file exist
-        top_id = rld[-1]['id']
+        top_id = rld[-1]["id"]
         ln = self.dst.read_link_file(top_id)
         sqf = self.dst.get_squash_filename(ln)
         if os.path.exists(sqf):

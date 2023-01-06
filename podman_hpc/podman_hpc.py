@@ -1,365 +1,312 @@
-#!/usr/bin/python3 -s
+#!/usr/bin/env python
 
 import sys
 import os
 import re
 import time
-import yaml
-from copy import deepcopy
+import click
+from . import click_passthrough as cpt
 from .migrate2scratch import MigrateUtils
-import toml
-from shutil import which
-from glob import glob
-try:
-    from argparse import ArgumentParser as _
-    _ = _(exit_on_error=True)
-    import argparse
-except TypeError:
-    from . import argparse_exit_on_error as argparse
+from .siteconfig import SiteConfig
+
 try:
     from os import waitstatus_to_exitcode
 except ImportError:
+
     def waitstatus_to_exitcode(status):
-        return os.WEXITSTATUS(status) if os.WIFEXITED(status) else -1*os.WTERMSIG(status)
-
-_MOD_ENV = "PODMANHPC_MODULES_DIR"
-_HOOKS_ENV = "PODMANHPC_HOOKS_DIR"
-_HOOKS_ANNO = "podman_hpc.hook_tool"
-
-class config:
-    """
-    Config class
-    """
-
-    def __init__(self, squash_dir=None):
-        self.uid = os.getuid()
-        try:
-            self.user = os.getlogin()
-        except OSError:
-            self.user = os.environ["USER"]
-        self.xdg_base = "/tmp/%d_hpc" % (self.uid)
-        self.run_root = self.xdg_base
-        self.graph_root = "%s/storage" % (self.xdg_base)
-        squash_default = "%s/storage" % (os.environ["SCRATCH"])
-        self.squash_dir = os.environ.get("SQUASH_DIR", squash_default)
-        if squash_dir:
-            self.squash_dir = squash_dir
-        self.podman_bin = which("podman")
-        if self.podman_bin is None:
-            raise OSError("No podman binary found in PATH.")
-        self.mount_program = which("fuse-overlayfs-wrap")
-        self.conmon_bin = which("conmon")
-        self.runtime = "crun"
-        self.options = []
-
-    def get_default_store_conf(self):
-        return {
-            "storage": {
-                "driver": "overlay",
-                "graphroot": self.graph_root,
-                "runroot": self.run_root,
-                "options": {
-                    "size": "",
-                    "remap-uids": "",
-                    "remap-gids": "",
-                    "ignore_chown_errors": "true",
-                    "remap-user": "",
-                    "remap-group": "",
-                    "mount_program": self.mount_program,
-                    "mountopt": "",
-                    "overlay": {},
-                },
-            }
-        }
-
-    def get_default_containers_conf(self):
-        return {
-            "engine": {"conmon_path": [self.conmon_bin]},
-            "containers": {
-                "seccomp_profile": "unconfined",
-                "runtime": self.runtime,
-            },
-        }
-
-    def get_config_home(self):
-        return "%s/config" % (self.xdg_base)
-
-
-def _write_conf(fn, data, conf, overwrite=False):
-    """
-    Write out a conf file
-    """
-    cdir = "/tmp/containers-user-%d/containers" % (conf.uid)
-    os.makedirs(cdir, exist_ok=True)
-    os.makedirs("%s/containers" % (conf.get_config_home()), exist_ok=True)
-    fp = os.path.join(conf.get_config_home(), "containers", fn)
-    if not os.path.exists(fp) or overwrite:
-        with open(fp, "w") as f:
-            toml.dump(data, f)
-
-
-def config_storage(conf, additional_stores=None):
-    """
-    Create a storage conf object
-    """
-    stor_conf = conf.get_default_store_conf()
-    opt = stor_conf["storage"]["options"]
-    if "additionalimagestores" not in stor_conf["storage"]["options"]:
-        stor_conf["storage"]["options"]["additionalimagestores"] = []
-    opt["additionalimagestores"].append(conf.squash_dir)
-    if additional_stores:
-        for loc in additional_stores.split(","):
-            opt["additionalimagestores"].append(loc)
-
-    return stor_conf
-
-
-def config_containers(conf, args, confs, modules_dir):
-    """
-    Create a container conf object
-    """
-    cont_conf = conf.get_default_containers_conf()
-    cmds = ["-e", "%s=%s" % (_MOD_ENV, modules_dir)]
-    cmds.extend(["--annotation", "%s=true" % (_HOOKS_ANNO)])
-    for mod, mconf in confs.items():
-        cli_arg = mconf["cli_arg"].replace('-','_')
-        if vars(args).get(cli_arg):
-            cmds.extend(mconf.get("additional_args", []))
-            cmds.extend(["-e", "%s=1" % (mconf["env"])])
-
-    cont_conf["containers"]["seccomp_profile"] = "unconfined"
-    return cont_conf, cmds
-
-
-def conf_env(conf, hpc):
-    """
-    Generate the environment setup
-    """
-
-    new_env = deepcopy(os.environ)
-    if hpc:
-        new_env["XDG_CONFIG_HOME"] = conf.get_config_home()
-        if "XDG_RUNTIME_DIR" in new_env:
-            new_env.pop("XDG_RUNTIME_DIR")
-    return new_env
-
-
-def get_params(args):
-    """
-    Try to extract the podman command and image name
-    """
-
-    comm = None
-    image = None
-    for arg in args:
-        if arg.startswith("-"):
-            continue
-        if comm:
-            image = arg
-            break
-        comm = arg
-    return comm, image
-
-
-def read_confs():
-
-    mdir = os.environ.get(_MOD_ENV, "/etc/podman_hpc/modules.d")
-    confs = {}
-    for d in glob(f"{mdir}/*.yaml"):
-        conf = yaml.load(open(d), Loader=yaml.FullLoader)
-        confs[conf["name"]] = conf
-    return confs, mdir
-
-
-def add_args(parser, confs):
-    for k, v in confs.items():
-        parser.add_argument(
-            "--%s" % (v["cli_arg"]), action="store_true", help=v.get("help")
+        return (
+            os.WEXITSTATUS(status)
+            if os.WIFEXITED(status)
+            else -1 * os.WTERMSIG(status)
         )
 
 
-def filter_podman_subcommand(podman_bin, subcommand, podman_args):
-    """ Filter invalid arguments from an argument list
-    for a given podman subcommand based on its --help text. """
-    # extract valid flags from subcommand help text, and populate an arg parser
-    opt_regex = re.compile(r"^\s*(?:(-\w), )?(--\w[\w\-]+)(?:\s(\w+))?")
-    p = argparse.ArgumentParser(exit_on_error=False,add_help=False)
-    with os.popen(" ".join([podman_bin, subcommand, "--help"])) as f:
-        for line in f:
-            opt = opt_regex.match(line)
-            if opt:
-                action = "store" if opt.groups()[2] else "store_true"
-                flags = [flag for flag in opt.groups()[:-1] if flag]
-                p.add_argument(*flags, action=action)
-    # remove unknown args from the podman_args
-    subcmd_args = podman_args.copy()
-    unknowns = p.parse_known_args(subcmd_args)[1]
-    uk_safe = {}  # indices of valid args that string== unknowns
-    while unknowns:
-        ukd = {}  # candidate indices of where to remove unknowns
-        for uk in set(unknowns):
-            ukd[uk] = [
-                idx
-                for idx, arg in enumerate(subcmd_args)
-                if (arg == uk and idx not in uk_safe.get(uk, []))
-            ]
-        uk = unknowns.pop(0)
-        # find and remove an invalid occurence of uk
-        while True:
-            args_tmp = subcmd_args.copy()
-            args_tmp.pop(ukd[uk][0])
-            try:
-                if p.parse_known_args(args_tmp)[1] == unknowns:
-                    subcmd_args.pop(ukd[uk][0])
-                    break
-            except argparse.ArgumentError:
-                pass
-            uk_safe.setdefault(uk, []).append(ukd[uk].pop(0))
-    return [podman_bin, subcommand] + subcmd_args
+# function to specify help message formatting to mimic the podman help page.
+# follows the style of click.Command.format_help()
+# this will be inherited by subcommands created with @podhpc.command()
+def podman_format(self, ctx, formatter):
+    self.format_short_help(ctx, formatter)
+    self.format_description(ctx, formatter)
+    formatter.write_paragraph()
+    self.format_usage(ctx, formatter)
+    self.format_options(ctx, formatter)
+    if self.epilog:
+        with formatter.section("Podman help page follows"):
+            self.format_epilog(ctx, formatter)
 
 
-def shared_run_args(podman_args, image, cmds, container_name="hpc",debug=False):
-    """ Construct argument list for `podman run` and `podman exec`
-    by filtering flags passed to `podman shared-run` """
-    if (debug):
-        print("calling shared_run_args with input podman_args:")
-        print(f"\t{podman_args}")
-
-    # generate valid subcommands from the given podman_args
-    ind_img = podman_args.index(image)
-    prun = filter_podman_subcommand(podman_args[0], "run", podman_args[:ind_img])
-    pexec = filter_podman_subcommand(podman_args[0], "exec", podman_args[:ind_img])
-
-    prun[2:2] = [
-                    "--hooks-dir",
-                    os.environ.get(
-                        _HOOKS_ENV, 
-                        f"{sys.prefix}/share/containers/oci/hooks.d"
-                    ),
-                    "--annotation", "%s=true" % (_HOOKS_ANNO),
-                    "--log-level","fatal",
-                    "--rm", "-d",
-                    "-e", "ENABLE_EXEC_WAIT=1",
-                    "--name", container_name
-                ]
-    prun.extend(cmds)
-    prun.extend([image, "/usr/bin/exec-wait", "-d"])
-    pexec[2:2] = [
-        "-e", '"PALS_*"',
-        "-e", '"PMI_*"',
-        "-e", '"SLURM_*"',
-        "--log-level", "fatal",
-    ]
-    pexec.extend([container_name])
-    pexec.extend(podman_args[ind_img+1:])
-
-    if (debug):
-        print(f"will execute podman run command:\n\t{prun}")
-        print(f"will execute podman exec command:\n\t{pexec}")
-
-    return prun, pexec
+# parse the `podman --help` page so it can be added as a custom epilog to main command help
+with os.popen("podman --help") as fid:
+    try:
+        text = re.sub(
+            "^.+(?=(Available Commands))", "\b\n", fid.read(), flags=re.DOTALL
+        )
+        podman_epilog = re.sub("(\n\s*\n)(?=\S)", "\n\n\b\n", text)
+    except:
+        podman_epilog = "For additional commands please see `podman --help`."
 
 
-def shared_run_launch(localid, run_cmd, env):
-    """ helper to break out of an if block """
-    if localid and int(localid) != 0:
-        return
+# decorator so that subcommands can request to receive SiteConfig object
+pass_siteconf = click.make_pass_decorator(SiteConfig, ensure=True)
+
+
+### podman-hpc command #######################################################
+@click.group(
+    cls=cpt.PassthroughGroup,
+    custom_format=podman_format,
+    epilog=podman_epilog,
+    options_metavar="[options]",
+    passthrough="podman",
+    invoke_without_command=True,
+)
+@click.pass_context
+@click.option(
+    "--additional-stores", type=str, help="Specify other storage locations"
+)
+@click.option(
+    "--squash-dir",
+    type=str,
+    help="Specify alternate squash directory location",
+)
+@click.option(
+    "--update-conf",
+    is_flag=True,
+    show_default=True,
+    default=False,
+    help="Force update of storage conf",
+)
+@click.option("--log-level", type=str, default="fatal", hidden=True)
+def podhpc(ctx, additional_stores, squash_dir, update_conf, log_level):
+    """Manage pods, containers and images ... on HPC!
+
+    The podman-hpc utility is a wrapper script around the podman
+    container engine. It provides additional subcommands for ease of
+    use and configuration of podman in a multi-node, multi-user high
+    performance computing environment.
+
+    """
+    overwrite = additional_stores or squash_dir or update_conf
+    if not (overwrite or ctx.invoked_subcommand):
+        click.echo(ctx.get_help())
+        ctx.exit()
+
+    # set up site configuration object
+    conf = SiteConfig(squash_dir=squash_dir, log_level=log_level)
+    conf.read_site_modules()
+    # migrate was here, is that important?
+    conf.config_storage(additional_stores)
+    conf.config_containers()
+    conf.config_env(hpc=True)
+
+    # optionally, save the storage conf
+    conf.export_storage_conf(overwrite=overwrite)
+
+    # add appropriate flags to call_podman based on invoked subcommand
+    # defcmd = ctx.command.default_command_fn
+    invcmd = ctx.command.get_command(ctx, ctx.invoked_subcommand)
+    for k, v in conf.sitemods.get(ctx.invoked_subcommand, {}).items():
+        invcmd = click.option(
+            f"--{v['cli_arg']}",
+            is_flag=True,
+            hidden=v.get("hidden", False),
+            help=v.get("help"),
+        )(invcmd)
+
+    # save the site config to a context object so it can be passed to subcommands
+    ctx.obj = conf
+
+
+### podman-hpc migrate subcommand ############################################
+@podhpc.command(options_metavar="[options]")
+@pass_siteconf
+@click.argument("image", type=str)
+def migrate(siteconf, image):
+    """Migrate an image to squashed."""
+    mu = MigrateUtils(dst=siteconf.squash_dir)
+    mu.migrate_image(image)
+    sys.exit()
+
+
+### podman-hpc rmsqi subcommand ##############################################
+@podhpc.command(options_metavar="[options]")
+@pass_siteconf
+@click.argument("image", type=str)
+def rmsqi(siteconf, image):
+    """Removes a squashed image."""
+    mu = MigrateUtils(dst=siteconf.squash_dir)
+    mu.remove_image(image)
+
+
+### podman-hpc pull subcommand (modified) ####################################
+@podhpc.command(
+    context_settings=dict(
+        ignore_unknown_options=True,
+    ),
+    options_metavar="[options]",
+)
+@pass_siteconf
+@click.pass_context
+@click.argument("podman_args", nargs=-1, type=click.UNPROCESSED)
+@click.argument("image")
+def pull(ctx, siteconf, image, podman_args):
+    """Pulls an image to a local repository and makes a squashed copy."""
     pid = os.fork()
     if pid == 0:
-        os.execve(run_cmd[0], run_cmd, env)
-    return pid
+        cmd = [siteconf.podman_bin, "pull"]
+        cmd.extend(podman_args)
+        cmd.append(image)
+        os.execve(cmd[0], cmd, os.environ)
+    pid, status = os.wait()
+    if status == 0:
+        click.echo(f"INFO: Migrating image to {siteconf.squash_dir}")
+        ctx.invoke(migrate, image=image)
+    else:
+        sys.stderr.write("Pull failed.\n")
+
+
+### podman-hpc shared-run subcommand #########################################
+@podhpc.command(
+    context_settings=dict(
+        ignore_unknown_options=True,
+    ),
+    options_metavar="[options]",
+)
+@pass_siteconf
+@click.argument("image")
+@click.argument(
+    "container-cmd",
+    nargs=-1,
+    type=click.UNPROCESSED,
+    metavar="[COMMAND [ARG...]]",
+)
+def shared_run(conf, image, container_cmd, **site_opts):
+    """Launch a single container and exec many threads in it
+
+    This is the recommended way to launch a container from a parallel launcher
+    such as Slurm `srun` or `mpirun`. One container will be started (per node), and all
+    process tasks will then be launched into that container via `exec` subcommand.
+    When all `exec` processes have concluded, the container will close and remove itself.
+
+    For valid flag options, see help pages for `run` and `exec` subcommands:
+
+    \b
+      podman-hpc run --help
+      podman-hpc exec --help
+    """
+    # click.echo(f"Launching a shared-run with args: {sys.argv}")
+
+    localid_var = os.environ.get("PODMANHPC_LOCALID_VAR", "SLURM_LOCALID")
+    localid = os.environ.get(localid_var)
+    container_name = f"uid-{os.getuid()}-pid-{os.getppid()}"
+
+    # construct run and exec commands from user options
+    options = sys.argv[
+        sys.argv.index("shared-run") + 1 : sys.argv.index(image)
+    ]
+    site_opts["exec_wait"] = True
+
+    run_cmd = [conf.podman_bin, "run", "--rm", "-d", "--name", container_name]
+    run_cmd.extend(
+        cpt.filterValidOptions(options, [conf.podman_bin, "run", "--help"])
+    )
+    run_cmd.extend(conf.get_cmd_extensions("run", site_opts))
+    run_cmd.extend([image, "/usr/bin/exec-wait", "-d"])
+
+    exec_cmd = [
+        conf.podman_bin,
+        "exec",
+        "-e",
+        '"PALS_*"',
+        "-e",
+        '"PMI_*"',
+        "-e",
+        '"SLURM_*"',
+    ]
+    exec_cmd.extend(
+        cpt.filterValidOptions(options, [conf.podman_bin, "exec", "--help"])
+    )
+    exec_cmd.extend([container_name] + list(container_cmd))
+
+    # click.echo(f"run_cmd is: {run_cmd}")
+    # click.echo(f"exec_cmd is: {exec_cmd}")
+
+    # start container with `podman run ...`
+    if (localid is None or int(localid) == 0) and os.fork():
+        os.execve(run_cmd[0], run_cmd, conf.env)
+    # wait for container to exist
+    while waitstatus_to_exitcode(
+        os.system(
+            f"{conf.podman_bin} --log-level fatal container exists {container_name}"
+        )
+    ):
+        time.sleep(0.2)
+    # wait for container to be "running"
+    os.system(
+        f"{conf.podman_bin} wait --log-level fatal --condition running {container_name} >/dev/null 2>&1"
+    )
+    # launch cmd in container with `podman exec ...`
+    os.execve(exec_cmd[0], exec_cmd, conf.env)
+
+
+### podman-hpc call_podman subcommand (default, hidden, passthrough) #########
+@podhpc.default_command(
+    context_settings=dict(ignore_unknown_options=True, help_option_names=[]),
+    hidden=True,
+)
+@pass_siteconf
+@click.pass_context
+@click.option("--help", is_flag=True, hidden=True)
+@click.argument("podman_args", nargs=-1, type=click.UNPROCESSED)
+def call_podman(ctx, siteconf, help, podman_args, **site_opts):
+    cmd = [siteconf.podman_bin, ctx.info_name]
+    cmd.extend(siteconf.get_cmd_extensions(ctx.info_name, site_opts))
+    cmd.extend(podman_args)
+
+    # click.echo("will call:")
+    # click.echo(cmd)
+
+    # if the help flag is called, we pass podman's STDOUT stream through a pipe
+    # to a stream editor, to inject additional help page info
+    if help:
+        cmd.insert(2, "--help")
+        app_name = ctx.find_root().command_path
+        passthrough_name = os.path.basename(cmd[0])
+
+        formatter = ctx.make_formatter()
+        ctx.command.format_options(ctx, formatter)
+        app_options = ""
+        if formatter.getvalue():
+            app_options = (
+                f"{app_name.capitalize()} {formatter.getvalue()}\n".replace(
+                    "\n", "\\n"
+                )
+            )
+
+        cmd_sed = [
+            "/usr/bin/sed",
+            "-e",
+            f"s/{passthrough_name}/{app_name}/",
+            "-e",
+            f"s/Options:/{app_options}{passthrough_name.capitalize()} &/",
+        ]
+
+        STDIN = 0
+        STDOUT = 1
+        p_read, p_write = os.pipe()
+        if os.fork():
+            os.close(p_write)
+            os.dup2(p_read, STDIN)
+            os.execv(cmd_sed[0], cmd_sed)
+            os._exit(os.EX_OSERR)
+        else:
+            os.close(p_read)
+            os.dup2(p_write, STDOUT)
+
+    os.execve(cmd[0], cmd, siteconf.env)
 
 
 def main():
-    parser = argparse.ArgumentParser(prog="podman-hpc", add_help=False)
-    parser.add_argument(
-        "--additional-stores", type=str, help="Specify other storage locations"
-    )
-    parser.add_argument(
-        "--squash-dir",
-        type=str,
-        help="Specify alternate squash directory location",
-    )
-    parser.add_argument(
-        "--update-conf",
-        action="store_true",
-        help="Force update of storage conf",
-    )
-    confs, modules_dir = read_confs()
-    add_args(parser, confs)
-    args, podman_args = parser.parse_known_args()
-    if "--help" in podman_args:
-        parser.print_help()
-    comm, image = get_params(podman_args)
-    conf = config(squash_dir=args.squash_dir)
-    mu = MigrateUtils(dst=conf.squash_dir)
-
-    if len(podman_args) > 0 and podman_args[0].startswith("mig"):
-        image = podman_args[1]
-        mu.migrate_image(image)
-        sys.exit()
-
-    # Generate Configs
-    stor_conf = config_storage(conf, additional_stores=args.additional_stores)
-    cont_conf, cmds = config_containers(conf, args, confs, modules_dir)
-    overwrite = False
-    if args.additional_stores or args.squash_dir or args.update_conf:
-        overwrite = True
-    _write_conf("storage.conf", stor_conf, conf, overwrite=overwrite)
-
-    # Prepare podman exec
-    env = conf_env(conf, True)
-    podman_args.insert(0, conf.podman_bin)
-    ll_set = False
-    for arg in podman_args:
-        if arg.startswith("--log-level"):
-            ll_set = True
-    if not ll_set:
-        cmds.extend(["--log-level", "fatal"])
-
-    if comm == "shared-run":
-        localid_var = os.environ.get("PODMAN_HPC_LOCALID_VAR", "SLURM_LOCALID")
-        localid = os.environ.get(localid_var)
-
-        container_name = f"uid-{os.getuid()}-pid-{os.getppid()}"
-        run_cmd, exec_cmd = shared_run_args(podman_args, image, cmds, container_name)
-
-        shared_run_launch(localid, run_cmd, env)
-        
-        # wait for container to exist
-        while waitstatus_to_exitcode(os.system(f"{conf.podman_bin} --log-level fatal container exists {container_name}")):
-            time.sleep(0.2)
-        # wait for container to be "running"
-        os.system(f"{conf.podman_bin} wait --log-level fatal --condition running {container_name} >/dev/null 2>&1")
-        os.execve(exec_cmd[0], exec_cmd, env)
-
-    if comm == "run":
-        ind = podman_args.index("run")
-        podman_args[ind:ind] = [
-            "--hooks-dir",
-            os.environ.get(
-                _HOOKS_ENV, f"{sys.prefix}/share/containers/oci/hooks.d"
-            ),
-        ]
-        ind = podman_args.index("run") + 1
-        podman_args[ind:ind] = cmds
-        os.execve(conf.podman_bin, podman_args, env)
-        sys.exit()
-    elif comm == "pull":
-        # If pull, then pull and migrate
-        pid = os.fork()
-        if pid == 0:
-            os.execve(conf.podman_bin, podman_args, os.environ)
-        pid, status = os.wait()
-        if status == 0:
-            print("INFO: Migrating image to %s" % (conf.squash_dir))
-            mu.migrate_image(image)
-        else:
-            sys.stderr.write("Pull failed\n")
-    elif comm == "rmi":
-        mu.remove_image(image)
-    else:
-        os.execve(conf.podman_bin, podman_args, env)
+    podhpc(prog_name="podman-hpc")
 
 
 if __name__ == "__main__":
