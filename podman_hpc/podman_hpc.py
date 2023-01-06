@@ -39,7 +39,8 @@ def podman_format(self, ctx, formatter):
 
 # parse the `podman --help` page so it can be added as a custom epilog to main command help
 initenv = os.environ
-os.environ["XDG_RUNTIME_DIR"] = "/tmp"
+if "XDG_RUNTIME_DIR" in os.environ:
+    os.environ.pop("XDG_RUNTIME_DIR")
 with os.popen("podman --help") as fid:
     try:
         text = re.sub(
@@ -48,7 +49,7 @@ with os.popen("podman --help") as fid:
         podman_epilog = re.sub("(\n\s*\n)(?=\S)", "\n\n\b\n", text)
     except:
         podman_epilog = "For additional commands please see `podman --help`."
-#os.environ = initenv
+os.environ = initenv
 
 # decorator so that subcommands can request to receive SiteConfig object
 pass_siteconf = click.make_pass_decorator(SiteConfig, ensure=True)
