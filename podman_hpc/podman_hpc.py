@@ -212,7 +212,6 @@ def shared_run(conf, image, container_cmd, **site_opts):
     options = sys.argv[
         sys.argv.index("shared-run") + 1 : sys.argv.index(image)
     ]
-    site_opts["exec_wait"] = True
 
     run_cmd = [conf.podman_bin, "run", "--rm", "-d", "--name", container_name]
     run_cmd.extend(
