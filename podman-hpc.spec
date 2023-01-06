@@ -50,7 +50,6 @@ run fully unprivileged.
 /usr/bin/podman-hpc
 /usr/bin/hook_tool
 /usr/bin/fuse-overlayfs-wrap
-/usr/bin/exec-wait
 %{python3_sitelib}/podman_hpc*
 /usr/share/containers/oci/hooks.d/02-hook_tool.json
 

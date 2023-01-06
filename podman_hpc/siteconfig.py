@@ -73,11 +73,10 @@ class SiteConfig:
     def get_default_containers_conf(self):
         return {
             "engine": {
-                "conmon_path": [self.conmon_bin],
+                "cgroup_manager": "cgroupfs",
             },
             "containers": {
                 "seccomp_profile": "unconfined",
-                "runtime": self.runtime,
             },
         }
 
@@ -100,7 +99,6 @@ class SiteConfig:
         Create a container conf object
         """
         cc = self.get_default_containers_conf()
-        cc["containers"]["seccomp_profile"] = "unconfined"
         self.container_conf = cc
 
     def config_env(self, hpc):
@@ -130,7 +128,7 @@ class SiteConfig:
         self._write_conf(filename, self.storage_conf, overwrite=overwrite)
 
     def export_containers_conf(
-        self, filename="container.conf", overwrite=False
+        self, filename="containers.conf", overwrite=False
     ):
         self._write_conf(filename, self.container_conf, overwrite=overwrite)
 

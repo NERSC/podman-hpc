@@ -249,7 +249,7 @@ class MigrateUtils:
             self.src_dir = self.src_dir or self._get_paths()
             self.src = ImageStore(self.src_dir)
             self.dst_dir = self.dst_dir or os.environ["SQUASH_DIR"]
-            self.dst = ImageStore(self.dst_dir)
+            self.dst = ImageStore(self.dst_dir, read_only=False)
             self._lazy_init_called = True
 
     @staticmethod
