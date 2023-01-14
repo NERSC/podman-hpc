@@ -7,8 +7,8 @@ import errno
 import subprocess
 import json
 import yaml
+import shutil
 from glob import glob
-from shutil import copyfile
 
 _MOD_ENV = "PODMANHPC_MODULES_DIR"
 
@@ -78,35 +78,49 @@ def do_plugin(rp, mod, modulesd):
     """
     log(mod)
     log(rp)
+
+    # handle the copy case
     for f in mod["copy"]:
         (src, tgt) = f.split(":")
         src = resolve_src(src, modulesd)
-        #just glob over everything
-        for path in glob(src):
-            #make sure path doesn't start with a string, or os.path.join will fail
-            if path.startswith('/'):
-                path = path[1:]
-            else:
-                continue
-            copy_target = os.path.join(rp, path)
-            log("%s %s" % (src, copy_target))
-            if os.path.exists(copy_target):
-                shutil.rmtree(copy_target)
-            os.makedirs(copy_target)
-            copyfile(src, copy_target, follow_symlinks=False)
+        if '*' in src:
+            for fp in glob(src):
+                # cut off leading slash
+                tgt2 = os.path.join(rp, fp[1:])
+                if os.path.exists(tgt2):
+                    os.remove(tgt2)
+                tgt_dir = os.path.dirname(tgt2)
+                if not os.path.exists(tgt_dir):
+                    os.makedirs(tgt_dir)
+                log("%s %s" % (fp, tgt2))
+                shutil.copyfile(fp, tgt2, follow_symlinks=False)
+        else:
+            tgt2 = os.path.join(rp, tgt[1:])
+            if os.path.exists(tgt2):
+                os.remove(tgt2)
+            tgt_dir = os.path.dirname(tgt2)
+            if not os.path.exists(tgt_dir):
+                os.makedirs(tgt_dir)
+            log("%s %s" % (src, tgt2))
+            shutil.copyfile(src, tgt2, follow_symlinks=False)
 
-    #handle bind in a similar way
-    for f in mod['bind']:
+    # handle the bind case
+    for f in mod["bind"]:
         (src, tgt) = f.split(":")
+        print("src:", src)
+        print("tgt:", tgt)
         src = resolve_src(src, modulesd)
-        for path in glob(src):
-            if path.startswith("/"):
-                path = path[1:]
-            else:
-                continue
-            bind_target = os.path.join(rp, path)
-            log("%s %s" % (src, bind_target))
-            bind_mount(fp, bind_target)
+        if '*' in src:
+            for fp in glob(src):
+                tgt2 = os.path.join(rp, fp[1:])
+                print("fp:", fp)
+                print("tgt", tgt)
+                bind_mount(fp, tgt2)
+        else:
+            tgt2 = os.path.join(rp, tgt[1:])
+            bind_mount(src, tgt2)
+            print("src", src)
+            print("tgt2", tgt2)
 
 
 def read_confs(mdir):
