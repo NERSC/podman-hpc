@@ -47,7 +47,7 @@ with os.popen("podman --help") as fid:
             "^.+(?=(Available Commands))", "\b\n", fid.read(), flags=re.DOTALL
         )
         podman_epilog = re.sub("(\n\s*\n)(?=\S)", "\n\n\b\n", text)
-    except:
+    except Exception:
         podman_epilog = "For additional commands please see `podman --help`."
 os.environ = initenv
 
@@ -55,7 +55,7 @@ os.environ = initenv
 pass_siteconf = click.make_pass_decorator(SiteConfig, ensure=True)
 
 
-### podman-hpc command #######################################################
+# podman-hpc command #######################################################
 @click.group(
     cls=cpt.PassthroughGroup,
     custom_format=podman_format,
@@ -122,7 +122,7 @@ def podhpc(ctx, additional_stores, squash_dir, update_conf, log_level):
     ctx.obj = conf
 
 
-### podman-hpc migrate subcommand ############################################
+# podman-hpc migrate subcommand ############################################
 @podhpc.command(options_metavar="[options]")
 @pass_siteconf
 @click.argument("image", type=str)
@@ -133,7 +133,7 @@ def migrate(siteconf, image):
     sys.exit()
 
 
-### podman-hpc rmsqi subcommand ##############################################
+# podman-hpc rmsqi subcommand ##############################################
 @podhpc.command(options_metavar="[options]")
 @pass_siteconf
 @click.argument("image", type=str)
@@ -143,7 +143,7 @@ def rmsqi(siteconf, image):
     mu.remove_image(image)
 
 
-### podman-hpc pull subcommand (modified) ####################################
+# podman-hpc pull subcommand (modified) ####################################
 @podhpc.command(
     context_settings=dict(
         ignore_unknown_options=True,
@@ -170,7 +170,7 @@ def pull(ctx, siteconf, image, podman_args):
         sys.stderr.write("Pull failed.\n")
 
 
-### podman-hpc shared-run subcommand #########################################
+# podman-hpc shared-run subcommand #########################################
 @podhpc.command(
     context_settings=dict(
         ignore_unknown_options=True,
@@ -211,7 +211,7 @@ def shared_run(conf, image, container_cmd, **site_opts):
 
     # construct run and exec commands from user options
     options = sys.argv[
-        sys.argv.index("shared-run") + 1 : sys.argv.index(image)
+        sys.argv.index("shared-run") + 1: sys.argv.index(image)
     ]
 
     run_cmd = [conf.podman_bin, "run", "--rm", "-d", "--name", container_name]
@@ -219,18 +219,14 @@ def shared_run(conf, image, container_cmd, **site_opts):
         cpt.filterValidOptions(options, [conf.podman_bin, "run", "--help"])
     )
     run_cmd.extend(conf.get_cmd_extensions("run", site_opts))
-    run_cmd.extend([image, "sleep", "infinity"])
+    run_cmd.append(image)
+    run_cmd.extend(conf.shared_run_command)
 
     exec_cmd = [
         conf.podman_bin,
         "exec",
-        "-e",
-        'PALS_*',
-        "-e",
-        'PMI_*',
-        "-e",
-        'SLURM_*',
     ]
+    exec_cmd.extend(conf.shared_run_exec_args)
     exec_cmd.extend(
         cpt.filterValidOptions(options, [conf.podman_bin, "exec", "--help"])
     )
@@ -268,7 +264,7 @@ def shared_run(conf, image, container_cmd, **site_opts):
         send_complete(sock_name, localid)
 
 
-### podman-hpc call_podman subcommand (default, hidden, passthrough) #########
+# podman-hpc call_podman subcommand (default, hidden, passthrough) #########
 @podhpc.default_command(
     context_settings=dict(ignore_unknown_options=True, help_option_names=[]),
     hidden=True,
@@ -336,7 +332,6 @@ def monitor(sockfile, ntasks, container_name, conf):
     while True:
         s.listen(1)
         conn, addr = s.accept()
-        data = conn.recv(1024)
         ct += 1
         if ct == ntasks:
             break
