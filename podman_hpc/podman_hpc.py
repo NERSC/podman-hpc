@@ -6,6 +6,7 @@ import socket
 import re
 import time
 import click
+import re
 from . import click_passthrough as cpt
 from .migrate2scratch import MigrateUtils
 from .siteconfig import SiteConfig
@@ -201,11 +202,9 @@ def shared_run(conf, image, container_cmd, **site_opts):
     """
     # click.echo(f"Launching a shared-run with args: {sys.argv}")
 
-    localid_var = os.environ.get("PODMANHPC_LOCALID_VAR", "SLURM_LOCALID")
-    ntasks_var = os.environ.get("PODMANHPC_TASKS_PER_NODE_VAR", "SLURM_STEP_TASKS_PER_NODE")
-
-    localid = os.environ.get(localid_var)
-    ntasks = int(os.environ.get(ntasks_var, "1").split('(')[0])
+    localid = os.environ.get(conf.localid_var)
+    ntasks_raw = os.environ.get(conf.tasks_per_node_var, "1")
+    ntasks = int(re.search(conf.ntasks_pattern, ntasks_raw)[0])
     container_name = f"uid-{os.getuid()}-pid-{os.getppid()}"
     sock_name = f"/tmp/uid-{os.getuid()}-pid-{os.getppid()}"
 
@@ -245,11 +244,8 @@ def shared_run(conf, image, container_cmd, **site_opts):
         os.dup2(devnull, 1)
         os.execve(run_cmd[0], run_cmd, conf.env)
     # wait for container to exist
-    while waitstatus_to_exitcode(
-        os.system(
-            f"{conf.podman_bin} --log-level fatal container exists {container_name}"
-        )
-    ):
+    comm = f"{conf.podman_bin} --log-level fatal container exists {container_name}"
+    while waitstatus_to_exitcode(os.system(comm)):
         time.sleep(0.2)
     # wait for container to be "running"
     os.system(
