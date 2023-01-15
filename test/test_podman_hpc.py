@@ -5,8 +5,7 @@ import os
 
 def test_conf():
     conf = phpc.config()
-    home = conf.get_config_home()
-    assert home is not None
+    assert conf.config_home is not None
 
 
 def test_sconf():

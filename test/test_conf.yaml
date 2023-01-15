@@ -1,0 +1,24 @@
+podman_bin: /bin/sleep
+modules_dir: /tmp/podman_hpc
+shared_run_exec_args:
+  - -e SLURM_*
+  - -e PALS_*
+  - -e PMI_*
+shared_run_command: ["bogus"]
+graph_root_template: "/imagedir/{{ user }}/storage"
+run_root_template: "/tmp/{{ user }}/run"
+mount_program: /bin/sleep
+additional_stores_default:
+  - extra
+
+default_args_template:
+  - --root /images/{{ user }}/storage
+  - --runroot /tmp/{{ uid }}/
+  - --test {{ env.FOO }}
+
+default_run_args:
+  - seccomp-policy unconfined
+
+# On hold
+# storage_conf_template: /etc/podman_hpc/storage.conf.tmpl
+# containers_conf_template: /etc/podman_hpc/containers.conf.tmpl
