@@ -6,7 +6,6 @@ import socket
 import re
 import time
 import click
-import re
 from . import click_passthrough as cpt
 from .migrate2scratch import MigrateUtils
 from .siteconfig import SiteConfig
@@ -47,7 +46,7 @@ with os.popen("podman --help") as fid:
         text = re.sub(
             "^.+(?=(Available Commands))", "\b\n", fid.read(), flags=re.DOTALL
         )
-        podman_epilog = re.sub("(\n\s*\n)(?=\S)", "\n\n\b\n", text)
+        podman_epilog = re.sub(r"(\n\s*\n)(?=\S)", "\n\n\b\n", text)
     except Exception:
         podman_epilog = "For additional commands please see `podman --help`."
 os.environ = initenv
@@ -104,14 +103,13 @@ def podhpc(ctx, additional_stores, squash_dir, update_conf, log_level):
     conf.config_containers()
     conf.config_env(hpc=True)
 
-    # optionally, save the storage conf
-    conf.export_storage_conf(overwrite=overwrite)
-    conf.export_containers_conf(overwrite=overwrite)
-
     # add appropriate flags to call_podman based on invoked subcommand
     # defcmd = ctx.command.default_command_fn
     invcmd = ctx.command.get_command(ctx, ctx.invoked_subcommand)
     for k, v in conf.sitemods.get(ctx.invoked_subcommand, {}).items():
+        if 'cli_arg' not in v:
+            continue
+        print(v)
         invcmd = click.option(
             f"--{v['cli_arg']}",
             is_flag=True,

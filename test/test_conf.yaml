@@ -6,9 +6,9 @@ shared_run_exec_args:
   - -e PMI_*
 shared_run_command: ["bogus"]
 graph_root_template: "/imagedir/{{ user }}/storage"
-run_root_template: "/tmp/{{ user }}/run"
+run_root_template: "/tmp/{{ uid }}/run"
 mount_program: /bin/sleep
-additional_stores_default:
+additional_stores:
   - extra
 
 default_args_template:

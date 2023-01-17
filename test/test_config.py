@@ -33,7 +33,6 @@ def test_conf_defaults(fix_paths):
 
 
 def test_conf_file(fix_paths, conf_file, monkeypatch):
-    monkeypatch.setenv("FOO", "BAR")
     conf = config.SiteConfig(squash_dir="/tmp")
     uid = os.getuid()
     user = os.getlogin()
@@ -42,10 +41,16 @@ def test_conf_file(fix_paths, conf_file, monkeypatch):
     assert "-e SLURM_*" in conf.shared_run_exec_args
     assert "bogus" in conf.shared_run_command
     assert user in conf.graph_root
-    assert user in conf.run_root
-    assert f"--root /images/{user}/storage" in conf.default_args
-    assert f"--runroot /tmp/{uid}/" in conf.default_args
-    assert f"--test BAR" in conf.default_args
+    assert str(uid) in conf.run_root
+    assert f"/imagedir/{user}/storage" == conf.graph_root
+    assert f"/tmp/{uid}/run" == conf.run_root
+    # This test environment variable substition and
+    # environment variables precedence
+    monkeypatch.setenv("FOO", "BAR")
+    tmpl = "/tmp/{{ env.FOO }}"
+    monkeypatch.setenv("PODMANHPC_RUN_ROOT_TEMPLATE", tmpl)
+    conf = config.SiteConfig(squash_dir="/tmp")
+    assert "/tmp/BAR" == conf.run_root
 
 
 def test_conf_modules(fix_paths, monkeypatch):

@@ -55,13 +55,11 @@ def bind_mount(src, tgt):
 def ldconfig():
     if not os.path.exists("/sbin/ldconfig"):
         return
-    log(subprocess.check_output(["/bin/ls"]).decode("utf-8"))
     ret = "unknown"
     try:
         ret = subprocess.check_output(["/sbin/ldconfig"])
     except subprocess.CalledProcessError:
-        log("ldconfig failed")
-        log(ret)
+        log(f"ldconfig failed: {ret}")
 
 
 def resolve_src(src, modulesd=os.path.abspath("")):
@@ -71,13 +69,12 @@ def resolve_src(src, modulesd=os.path.abspath("")):
 
 
 def do_plugin(rp, mod, modulesd):
-    log(mod)
-    log(rp)
+    log(f"Module: {mod}")
     for f in mod["copy"]:
         (src, tgt) = f.split(":")
         src = resolve_src(src, modulesd)
         tgt2 = os.path.join(rp, tgt[1:])
-        log("%s %s" % (src, tgt2))
+        log(f"copying: {src} to {tgt2}")
         if os.path.exists(tgt2):
             os.remove(tgt2)
         tgt_dir = os.path.dirname(tgt2)
@@ -90,9 +87,11 @@ def do_plugin(rp, mod, modulesd):
         if src.endswith("*"):
             for fp in glob(src):
                 tgt2 = os.path.join(rp, fp[1:])
+                log(f"mounting: {fp} to {tgt2}")
                 bind_mount(fp, tgt2)
         else:
             tgt2 = os.path.join(rp, tgt[1:])
+            log(f"mounting: {src} to {tgt2}")
             bind_mount(src, tgt2)
 
 
@@ -123,19 +122,21 @@ def main():
     lf = cf_env.get("LOG_PLUGIN")
     if lf:
         logger = open(lf, "w")
+    log("input")
     log(json.dumps(inp, indent=2))
-    log(os.environ)
+    log("config.json")
     log(json.dumps(cf, indent=2))
     rp = cf["root"]["path"]
 
     setns(pid, "mnt")
     os.chroot("/")
+    log(json.dumps(plug_conf, indent=2))
     for m in plug_conf:
         if plug_conf[m]["env"] in cf_env:
             log("Loading %s" % (m))
             do_plugin(rp, plug_conf[m], plug_conf_fn)
     ret = os.chroot(rp)
-    log(ret)
+    log(f"chroot return: {ret}")
 
     ldconfig()
 

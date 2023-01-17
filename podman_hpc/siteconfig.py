@@ -29,7 +29,7 @@ class SiteConfig:
                      "shared_run_exec_args", "shared_run_command",
                      "graph_root", "run_root",
                      "default_args", "default_run_args",
-                     "additional_stores_default", "hooks_dir",
+                     "additional_stores", "hooks_dir",
                      "localid_var", "tasks_per_node_var", "ntasks_pattern",
                      "config_home"]
     _valid_templates = ["shared_run_args_template",
@@ -37,14 +37,14 @@ class SiteConfig:
                         "run_root_template",
                         "default_args_template",
                         "default_run_args_template",
-                        "additional_stores_default_template",
+                        "additional_stores_template",
                         "config_home_template"
                         ]
     _uid = os.getuid()
     _xdg_base = f"/tmp/{_uid}_hpc"
     config_home = f"{_xdg_base}/config"
     run_root = _xdg_base
-    additional_stores_default = None
+    additional_stores = []
     default_args = []
     hooks_dir = f"{sys.prefix}/share/containers/oci/hooks.d"
     graph_root = f"{_xdg_base}/storage"
@@ -85,6 +85,22 @@ class SiteConfig:
             self._check_and_set(param)
 
         self.read_site_modules()
+        # TODO: Allow this to be over-rideable
+        self.default_args = [
+                "--root", self.graph_root,
+                "--runroot", self.run_root,
+                "--storage-opt",
+                f"additionalimagestore={self.additionalimagestore()}",
+                "--storage-opt",
+                f"mount_program={self.mount_program}",
+                "--cgroup-manager", "cgroupfs",
+                ]
+        self.default_run_args = [
+                "--hooks-dir", self.hooks_dir,
+                "-e", f"{_MOD_ENV}={self.modules_dir}",
+                "--annotation", f"{_HOOKS_ANNO}=true",
+                "--security-opt", "seccomp=unconfined",
+                ]
         self.log_level = log_level
 
     def dump_config(self):
@@ -205,6 +221,11 @@ class SiteConfig:
             },
         }
 
+    def additionalimagestore(self):
+        ais = [self.squash_dir]
+        ais.extend(self.additional_stores)
+        return ','.join(ais)
+
     def config_storage(self, additional_stores=None):
         """
         Create a storage conf object
@@ -268,19 +289,12 @@ class SiteConfig:
 
         subcomand: run, images, etc
         """
-        cmds = []
+        cmds = self.default_args
         if subcommand == "run":
-            cmds.extend(
-                [
-                    "--hooks-dir",
-                    self.hooks_dir,
-                    "-e",
-                    f"{_MOD_ENV}={self.modules_dir}",
-                    "--annotation",
-                    f"{_HOOKS_ANNO}=true",
-                ]
-            )
+            cmds.extend(self.default_run_args)
         for mod, mconf in self.sitemods.get(subcommand, {}).items():
+            if 'cli_arg' not in mconf:
+                continue
             cli_arg = mconf["cli_arg"].replace("-", "_")
             if args.get(cli_arg, False):
                 cmds.extend(mconf.get("additional_args", []))

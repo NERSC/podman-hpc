@@ -27,7 +27,7 @@ The list of configurable values is:
 * run_root: (str) directory for teh run root (default: /tmp/{uid}_hpc)
 * default_args: additional arguments to pass to podman (future)
 * default_run_args: additional run arguments (future)
-* additional_stores_default: (list) additional storage areas
+* additional_stores: (list) additional storage areas
 * hooks_dir: (str) directory for hooks. Note: this should have the podman_hpc hooks tool configured.
 * config_home: (str) directory where the generated configuration files will be written and XDG_CONFIG_HOME will be set.
 * localid_var: (str) environment variable to determine the local node rank (default: `SLURM_LOCALID`)
