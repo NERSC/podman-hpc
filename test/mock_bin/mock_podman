@@ -1,0 +1,11 @@
+#!/bin/bash
+
+# This does nothing
+if [ $(echo $@|grep -c 'run --help') -gt 0 ] ; then
+    echo "help"
+    mdir=$(dirname $0)
+    cat $mdir/run_help.txt
+elif [ $(echo $@|grep -c 'run ') -gt 0 ] ; then
+    echo "bogusid"
+fi
+echo $@ >> $MOCK_OUT

@@ -25,7 +25,7 @@ logger = None
 
 def log(msg):
     if logger:
-        logger.write("%s\n" % (msg))
+        logger.write(f"{msg}\n")
 
 
 def setns(pid, ns):
@@ -33,7 +33,7 @@ def setns(pid, ns):
     Attach to a namespace using the pid
     ns = ["mnt", "pid", "net", ...]
     """
-    pth = "/proc/%s/ns/%s" % (pid, ns)
+    pth = f"/proc/{pid}/ns/{ns}"
     tgt = open(pth, "r")
     if _libc.setns(tgt.fileno(), 0) == -1:
         e = ctypes.get_errno()
@@ -133,7 +133,7 @@ def main():
     log(json.dumps(plug_conf, indent=2))
     for m in plug_conf:
         if plug_conf[m]["env"] in cf_env:
-            log("Loading %s" % (m))
+            log(f"Loading {m}")
             do_plugin(rp, plug_conf[m], plug_conf_fn)
     ret = os.chroot(rp)
     log(f"chroot return: {ret}")

@@ -77,6 +77,8 @@ class SiteConfig:
         except OSError:
             self.runtime = self.trywhich("runc")
         # self.options = []
+        if squash_dir:
+            self.squash_dir = squash_dir
         self.conf_file_data = {}
         self._read_config_file()
         for param in self._valid_templates:

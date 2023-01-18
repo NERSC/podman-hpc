@@ -1,15 +1,19 @@
 import podman_hpc.hook_tool as ht
+import podman_hpc.configure_hooks as ch
 import sys
 import io
 import os
 import json
 import ctypes
 import time
+import pytest
 
 
 _libc = ctypes.CDLL(ctypes.util.find_library('c'), use_errno=True)
 
 
+@pytest.mark.skipif(not os.path.exists("/proc"),
+                    reason="requires running on linux system")
 def test_conf(monkeypatch, tmp_path):
     tdir = os.path.dirname(__file__)
     # conf = os.path.join(tdir, "test.yaml")
@@ -75,3 +79,18 @@ def test_conf(monkeypatch, tmp_path):
     _libc.umount2(null, 2)
     assert os.path.exists(log_file)
     # print(ret)
+
+
+def test_conf_hook(monkeypatch, tmp_path, capsys):
+    hook_out = os.path.join(tmp_path, "02-hook_tool.json")
+
+    def mock_exit(exit_code):
+        return 0
+
+    sys.argv = ["podman_hpc", "--hooksd", str(tmp_path)]
+    monkeypatch.setattr(sys, "exit", mock_exit)
+    ch.main()
+    captured = capsys.readouterr()
+    assert "Successfully" in captured.out
+    ho = json.load(open(hook_out))
+    assert "version" in ho
