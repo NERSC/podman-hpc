@@ -25,12 +25,15 @@ except ImportError:
         )
 
 
-def run_devnull(cmd):
+def podman_devnull(cmd, conf):
     """
     Run a command and ignore the output.
     Returns the exit code
     """
-    proc = Popen(cmd, stdout=PIPE, stderr=PIPE)
+    newcmd = [conf.podman_bin]
+    newcmd.extend(conf.get_cmd_extensions(cmd[0], None))
+    newcmd.extend(cmd)
+    proc = Popen(newcmd, stdout=PIPE, stderr=PIPE)
     proc.communicate()
     return proc.returncode
 
@@ -243,17 +246,7 @@ def shared_run(conf, image, container_cmd, **site_opts):
     exec_cmd.extend(
         cpt.filterValidOptions(options, [conf.podman_bin, "exec", "--help"])
     )
-    # We need to filter out any run args in the container_cmd
-    cmd = [conf.podman_bin, "run", "--help"]
-    valid_params = cpt.filterValidOptions(list(container_cmd), cmd)
-    # Find the first occurence not in the valid list
-    idx = 0
-    for idx, item in enumerate(container_cmd):
-        if item in valid_params:
-            continue
-        break
-    exec_cmd.extend([container_name] + list(container_cmd[idx+1:]))
-
+    exec_cmd.extend([container_name] + list(container_cmd))
     # click.echo(f"run_cmd is: {run_cmd}")
     # click.echo(f"exec_cmd is: {exec_cmd}")
 
@@ -268,11 +261,11 @@ def shared_run(conf, image, container_cmd, **site_opts):
         run_thread.start()
 
     # wait for container to exist
-    comm = [conf.podman_bin, "container", "exists", container_name]
-    while run_devnull(comm) != 0:
+    comm = ["container", "exists", container_name]
+    while podman_devnull(comm, conf) != 0:
         time.sleep(0.2)
-    comm = [conf.podman_bin, "wait", "--condition", "running"]
-    run_devnull(comm)
+    comm = ["wait", "--condition", "running", container_name]
+    podman_devnull(comm, conf)
     proc = Popen(exec_cmd, env=conf.env)
     proc.communicate()
     send_complete(sock_name, localid)
@@ -355,8 +348,8 @@ def monitor(sockfile, ntasks, container_name, conf):
     conn.close()
     os.remove(sockfile)
     # cleanup
-    run_devnull([conf.podman_bin, "kill", container_name])
-    run_devnull([conf.podman_bin, "rm", container_name])
+    podman_devnull(["kill", container_name], conf)
+    podman_devnull(["rm", container_name], conf)
 
 
 def send_complete(sockfile, lid):

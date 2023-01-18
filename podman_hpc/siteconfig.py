@@ -291,7 +291,8 @@ class SiteConfig:
 
         subcomand: run, images, etc
         """
-        cmds = self.default_args
+        cmds = []
+        cmds.extend(self.default_args)
         if subcommand == "run":
             cmds.extend(self.default_run_args)
         for mod, mconf in self.sitemods.get(subcommand, {}).items():
