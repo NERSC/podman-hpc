@@ -173,6 +173,7 @@ def pull(ctx, siteconf, image, podman_args):
     """Pulls an image to a local repository and makes a squashed copy."""
     cmd = [siteconf.podman_bin, "pull"]
     cmd.extend(podman_args)
+    cmd.extend(siteconf.default_args)
     cmd.append(image)
     proc = Popen(cmd)
     proc.communicate()
@@ -192,14 +193,13 @@ def pull(ctx, siteconf, image, podman_args):
     options_metavar="[options]",
 )
 @pass_siteconf
-@click.argument("image")
 @click.argument(
-    "container-cmd",
+    "run-args",
     nargs=-1,
     type=click.UNPROCESSED,
-    metavar="[COMMAND [ARG...]]",
+    metavar="IMAGE [COMMAND [ARG...]]",
 )
-def shared_run(conf, image, container_cmd, **site_opts):
+def shared_run(conf, run_args, **site_opts):
     """Launch a single container and exec many threads in it
 
     This is the recommended way to launch a container from a parallel launcher
@@ -225,6 +225,19 @@ def shared_run(conf, image, container_cmd, **site_opts):
     sock_name = f"/tmp/uid-{os.getuid()}-pid-{os.getppid()}"
 
     # construct run and exec commands from user options
+    # We need to filter out any run args in the run_args
+    cmd = [conf.podman_bin, "run", "--help"]
+    valid_params = cpt.filterValidOptions(list(run_args), cmd)
+    # Find the first occurence not in the valid list
+    idx = 0
+    for idx, item in enumerate(run_args):
+        if item in valid_params:
+            continue
+        break
+    image = run_args[idx]
+    container_cmd = run_args[idx+1:]
+    # TODO: maybe do some validation on the iamge and container_cmd
+
     options = sys.argv[
         sys.argv.index("shared-run") + 1: sys.argv.index(image)
     ]

@@ -74,7 +74,7 @@ def test_run(monkeypatch, fix_paths, mock_exit):
 
 
 def test_shared_run(monkeypatch, fix_paths, mock_podman, mock_exit):
-    sys.argv = ["podman_hpc", "shared-run", "-it", "--rm", 
+    sys.argv = ["podman_hpc", "shared-run", "-it", "--rm",
                 "--volume", "/a:/b", "ubuntu", "uptime"]
     monkeypatch.setenv("SLURM_LOCALID", "0")
     monkeypatch.setenv("SLURM_STEP_TASKS_PER_NODE", "1")
@@ -87,11 +87,12 @@ def test_shared_run(monkeypatch, fix_paths, mock_podman, mock_exit):
                 run = items
             elif items[0] == "exec":
                 exec = items
-    # print(run)
-    # print(exec)
+    uid = os.getuid()
     assert run is not None
     assert "--root" in run
+    assert f"/tmp/{uid}_hpc/storage" in run
     assert "--name" in run
+    assert "ubuntu" in run
     assert exec is not None
     assert exec[-1] == "uptime"
     assert "SLURM_*" in exec
@@ -100,16 +101,21 @@ def test_shared_run(monkeypatch, fix_paths, mock_podman, mock_exit):
     assert "--rm" not in exec
 
 
-def test_pull(fix_paths, mock_podman, mock_exit, tmp_path, capsys):
-    sys.argv = ["podman_hpc", "--squash-dir", str(tmp_path), "pull", "ubuntu"]
-    # uid = os.getuid()
+def test_pull(monkeypatch, fix_paths, mock_podman, mock_exit,
+              tmp_path, capsys):
+    sys.argv = ["podman_hpc", "--squash-dir", str(tmp_path),
+                "pull", "alpine"]
+    tdir = os.path.dirname(__file__)
+    src = os.path.join(tdir, "storage")
+    monkeypatch.setenv("PODMANHPC_GRAPH_ROOT", src)
     phpc.main()
     captured = capsys.readouterr()
     assert "Migrating" in captured.out
     assert str(tmp_path) in captured.out
     out = open(mock_podman).read()
-    assert "pull ubuntu" in out
-    # TODO: Add more checks
+    assert "pull " in out
+    assert src in out
+    assert captured.err == ""
 
 
 def test_migrate(fix_paths, mock_podman, mock_exit, tmp_path):
