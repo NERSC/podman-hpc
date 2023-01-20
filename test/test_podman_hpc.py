@@ -2,6 +2,7 @@ import podman_hpc.podman_hpc as phpc
 import sys
 import os
 import pytest
+import json
 
 
 @pytest.fixture
@@ -116,6 +117,13 @@ def test_pull(monkeypatch, fix_paths, mock_podman, mock_exit,
     assert "pull " in out
     assert src in out
     assert captured.err == ""
+    # TODO: Fix migrate to pass through arguments
+    # sys.argv = ["podman_hpc", "--squash-dir", str(tmp_path),
+    #             "rmsqi", "alpine"]
+    # phpc.main()
+    # imagej = os.path.join(tmp_path, "storage", "overlay-images", 
+    #                       "images.json")
+    # d = json.load(open(imagej))
 
 
 def test_migrate(fix_paths, mock_podman, mock_exit, tmp_path):
@@ -124,3 +132,22 @@ def test_migrate(fix_paths, mock_podman, mock_exit, tmp_path):
     phpc.main()
     assert os.path.exists(os.path.join(tmp_path, "overlay"))
     # TODO: Add more checks
+
+def test_modules(monkeypatch, fix_paths, mock_exit):
+    sys.argv = ["podman_hpc", "run", "-it", "--rm", "--gpu", "ubuntu"]
+    uid = os.getuid()
+    global args_passed
+    args_passed = []
+
+    def mock_execve(bin, args, path):
+        global args_passed
+        args_passed.append(args)
+        return 0
+
+    monkeypatch.setattr(os, "execve", mock_execve)
+    test_dir = os.path.dirname(__file__)
+    modules_dir = os.path.join(test_dir, "..", "etc", "modules.d")
+    monkeypatch.setenv("PODMANHPC_MODULES_DIR", modules_dir)
+    phpc.main()
+    assert "--gpu" not in args_passed[0]
+    assert "ENABLE_GPU=1" in args_passed[0]

@@ -88,21 +88,23 @@ class SiteConfig:
 
         self.read_site_modules()
         # TODO: Allow this to be over-rideable
-        self.default_args = [
-                "--root", self.graph_root,
-                "--runroot", self.run_root,
-                "--storage-opt",
-                f"additionalimagestore={self.additionalimagestore()}",
-                "--storage-opt",
-                f"mount_program={self.mount_program}",
-                "--cgroup-manager", "cgroupfs",
-                ]
-        self.default_run_args = [
-                "--hooks-dir", self.hooks_dir,
-                "-e", f"{_MOD_ENV}={self.modules_dir}",
-                "--annotation", f"{_HOOKS_ANNO}=true",
-                "--security-opt", "seccomp=unconfined",
-                ]
+        if len(self.default_args) == 0:
+            self.default_args = [
+                    "--root", self.graph_root,
+                    "--runroot", self.run_root,
+                    "--storage-opt",
+                    f"additionalimagestore={self.additionalimagestore()}",
+                    "--storage-opt",
+                    f"mount_program={self.mount_program}",
+                    "--cgroup-manager", "cgroupfs",
+                    ]
+        if len(self.default_run_args) == 0:
+            self.default_run_args = [
+                    "--hooks-dir", self.hooks_dir,
+                    "-e", f"{_MOD_ENV}={self.modules_dir}",
+                    "--annotation", f"{_HOOKS_ANNO}=true",
+                    "--security-opt", "seccomp=unconfined",
+                    ]
         self.log_level = log_level
 
     def dump_config(self):
@@ -149,8 +151,12 @@ class SiteConfig:
             newval = self._apply_template(newval)
             attr = attr.replace("_template", "")
 
-        # TODO: add type validation (e.g. str or list)
         if setval:
+            # Expand to a list if the type should be a list
+            # Assumes a common seperated string
+            if isinstance(getattr(self, attr), list) and \
+               isinstance(newval, str):
+                newval = newval.split(',')
             setattr(self, attr, newval)
 
     def _apply_template(self, templ):

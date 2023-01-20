@@ -14,7 +14,7 @@ _libc = ctypes.CDLL(ctypes.util.find_library('c'), use_errno=True)
 
 @pytest.mark.skipif(not os.path.exists("/proc"),
                     reason="requires running on linux system")
-def test_conf(monkeypatch, tmp_path):
+def test_hook(monkeypatch, tmp_path):
     tdir = os.path.dirname(__file__)
     # conf = os.path.join(tdir, "test.yaml")
     conf = os.path.join(tdir, "modules.d")
@@ -45,12 +45,7 @@ def test_conf(monkeypatch, tmp_path):
         time.sleep(4)
         os._exit(0)
     time.sleep(1)
-#    uidmapfile = '/proc/self/uid_map'
-#    uidmap = "0 %d 1" % os.getuid()
     ht.setns(pid, "user")
-#    print("Writing uidmap = '%s' to '%s'" % (uidmap, uidmapfile))
-#    with open(uidmapfile,'w') as file_:
-#        file_.write(uidmap)
 
     hconf = {
             'pid': pid,
@@ -78,7 +73,6 @@ def test_conf(monkeypatch, tmp_path):
     os.wait()
     _libc.umount2(null, 2)
     assert os.path.exists(log_file)
-    # print(ret)
 
 
 def test_conf_hook(monkeypatch, tmp_path, capsys):

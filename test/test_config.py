@@ -28,6 +28,7 @@ def test_conf_defaults(fix_paths):
     assert conf.config_home == f"/tmp/{uid}_hpc/config"
     assert conf.get_default_store_conf() is not None
     assert conf.get_default_containers_conf() is not None
+    assert f"/tmp/{uid}_hpc/storage" in conf.default_args
     conf.config_env(True)
     assert conf.env is not None
 
@@ -38,7 +39,7 @@ def test_conf_file(fix_paths, conf_file, monkeypatch):
     user = os.getlogin()
     assert conf.podman_bin == "/bin/sleep"
     assert conf.mount_program == "/bin/sleep"
-    assert "-e SLURM_*" in conf.shared_run_exec_args
+    assert "SLURM_*" in conf.shared_run_exec_args
     assert "bogus" in conf.shared_run_command
     assert user in conf.graph_root
     assert str(uid) in conf.run_root
@@ -51,14 +52,18 @@ def test_conf_file(fix_paths, conf_file, monkeypatch):
     monkeypatch.setenv("PODMANHPC_RUN_ROOT_TEMPLATE", tmpl)
     conf = config.SiteConfig(squash_dir="/tmp")
     assert "/tmp/BAR" == conf.run_root
+    assert f"/images/{user}/storage" in conf.default_args
+    assert f"/tmp/{uid}/" in conf.default_args
 
 
 def test_conf_modules(fix_paths, monkeypatch):
     test_dir = os.path.dirname(__file__)
     modules_dir = os.path.join(test_dir, "..", "etc", "modules.d")
     monkeypatch.setenv("PODMANHPC_MODULES_DIR", modules_dir)
-    conf = config.SiteConfig(squash_dir="/tmp")
+    conf = config.SiteConfig(squash_dir="/tmp", log_level="DEBUG")
     assert len(conf.active_modules) > 0
+    args = conf.get_cmd_extensions("run", {"gpu": True})
+    assert "ENABLE_GPU=1" in args
 
 
 def test_conf_prec(conf_file, fix_paths, monkeypatch):
@@ -69,18 +74,30 @@ def test_conf_prec(conf_file, fix_paths, monkeypatch):
     assert conf.modules_dir == modules_dir
 
 
-#    def get_default_store_conf(self):
-#    def get_default_containers_conf(self):
-#    def get_config_home(self):
-#    def config_storage(self, additional_stores=None):
-#        sc = self.get_default_store_conf()
-#        ais = sc["storage"]["options"].setdefault("additionalimagestores", [])
-#    def config_containers(self):
-#        cc = self.get_default_containers_conf()
-#    def config_env(self, hpc):
-#    def _write_conf(self, filename, data, overwrite=False):
-#    def export_storage_conf(self, filename="storage.conf", overwrite=False):
-#    def export_containers_conf(
-#    def get_cmd_extensions(self, subcommand, args):
-#    # to parse appropriately.  This would allow adding site-specific default
-#    def read_site_modules(self):
+def test_conf_funcs(fix_paths, monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("PODMANHPC_CONFIG_HOME", str(tmp_path))
+    conf = config.SiteConfig(squash_dir="/tmp")
+    conf.config_containers()
+    conf.config_storage(additional_stores="/a:/b")
+    conf.export_containers_conf()
+    conf.export_storage_conf()
+    sc = os.path.join(tmp_path, "containers", "storage.conf")
+    assert os.path.exists(sc)
+    sc = os.path.join(tmp_path, "containers", "containers.conf")
+    assert os.path.exists(sc)
+    conf.dump_config()
+    captured = capsys.readouterr()
+    assert "SLURM_LOCALID" in captured.out
+
+
+def test_typing(fix_paths, monkeypatch, tmp_path):
+    monkeypatch.setenv("PODMANHPC_CONFIG_HOME", str(tmp_path))
+    monkeypatch.setenv("PODMANHPC_DEFAULT_ARGS", "a,b")
+    monkeypatch.setenv("PODMANHPC_DEFAULT_RUN_ARGS_TEMPLATE",
+                       "{{ uid }},{{ user }}")
+    conf = config.SiteConfig(squash_dir="/tmp")
+    assert isinstance(conf.default_args, list)
+    assert conf.default_args == ["a", "b"]
+    uid = os.getuid()
+    user = os.getlogin()
+    assert conf.default_run_args == [str(uid), user]
