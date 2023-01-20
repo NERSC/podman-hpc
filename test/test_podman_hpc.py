@@ -117,13 +117,19 @@ def test_pull(monkeypatch, fix_paths, mock_podman, mock_exit,
     assert "pull " in out
     assert src in out
     assert captured.err == ""
-    # TODO: Fix migrate to pass through arguments
-    # sys.argv = ["podman_hpc", "--squash-dir", str(tmp_path),
-    #             "rmsqi", "alpine"]
-    # phpc.main()
-    # imagej = os.path.join(tmp_path, "storage", "overlay-images", 
-    #                       "images.json")
-    # d = json.load(open(imagej))
+    imagej = os.path.join(tmp_path, "overlay-images",
+                          "images.json")
+    d = json.load(open(imagej))
+    id = "9c6f0724472873bb50a2ae67a9e7adcb57673a183cea8b06eb778dca859181b5"
+    assert d[0]['id'] == id
+    run = out.split("\n")[-2].split()
+    assert "/mksq" in run
+    assert "/sqout" in run
+    sys.argv = ["podman_hpc", "--squash-dir", str(tmp_path),
+                "rmsqi", "alpine"]
+    phpc.main()
+    d = json.load(open(imagej))
+    assert len(d) == 0
 
 
 def test_migrate(fix_paths, mock_podman, mock_exit, tmp_path):
@@ -133,9 +139,10 @@ def test_migrate(fix_paths, mock_podman, mock_exit, tmp_path):
     assert os.path.exists(os.path.join(tmp_path, "overlay"))
     # TODO: Add more checks
 
+
 def test_modules(monkeypatch, fix_paths, mock_exit):
-    sys.argv = ["podman_hpc", "run", "-it", "--rm", "--gpu", "ubuntu"]
-    uid = os.getuid()
+    sys.argv = ["podman_hpc", "run", "-it", "--rm", "--gpu",
+                "ubuntu"]
     global args_passed
     args_passed = []
 

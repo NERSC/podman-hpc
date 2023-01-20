@@ -102,19 +102,18 @@ class ImageStore:
 
         if not os.path.exists(self.base):
             os.mkdir(self.base)
-        for e in ["", "/l", "-images", "-layers"]:
-            p = os.path.join(self.base, "overlay%s" % (e))
-            if not os.path.exists(p):
-                os.mkdir(p)
-        for t in ["images", "layers"]:
-            p = "%s/overlay-%s/%s.lock" % (self.base, t, t)
-            if not os.path.exists(p):
-                with open(p, "w") as f:
+        for ext in ["", "/l", "-images", "-layers"]:
+            pth = os.path.join(self.base, f"overlay{ext}")
+            if not os.path.exists(pth):
+                os.mkdir(pth)
+        for typ in ["images", "layers"]:
+            pth = f"{self.base}/overlay-{typ}/{typ}.lock"
+            if not os.path.exists(pth):
+                with open(pth, "w") as f:
                     f.write("")
-        for t in ["images", "layers"]:
-            p = "%s/overlay-%s/%s.json" % (self.base, t, t)
-            if not os.path.exists(p):
-                with open(p, "w") as f:
+            pth = f"{self.base}/overlay-{typ}/{typ}.json"
+            if not os.path.exists(pth):
+                with open(pth, "w") as f:
                     f.write("[]")
 
     def chk_image(self, id):
@@ -141,7 +140,7 @@ class ImageStore:
         if self.read_only:
             raise ValueError("Cannot init read-only stroage")
 
-        fn = os.path.join(self.base, "overlay-%s/%s.json" % (otype, otype))
+        fn = os.path.join(self.base, f"overlay-{otype}", f"{otype}.json")
         data = json.load(open(fn))
         changed = False
         out = []
@@ -152,7 +151,7 @@ class ImageStore:
             out.append(rec)
         if changed:
             json.dump(out, open(fn, "w"))
-            logging.debug("Updated %s" % (fn))
+            logging.debug(f"Updated {fn}")
 
     def drop_tag(self, image, id):
         """
@@ -193,7 +192,7 @@ class ImageStore:
         if self.read_only:
             raise ValueError("Cannot init read-only stroage")
 
-        fn = os.path.join(self.base, "overlay-%s/%s.json" % (otype, otype))
+        fn = os.path.join(self.base, f"overlay-{otype}", f"{otype}.json")
         data = json.load(open(fn))
         by_id = {}
         for row in data:
@@ -206,7 +205,7 @@ class ImageStore:
                 changed = True
         if changed:
             json.dump(data, open(fn, "w"))
-            logging.debug("Updated %s" % (fn))
+            logging.debug(f"Updated {fn}")
             self.refresh()
 
     def get_squash_filename(self, link):
@@ -228,12 +227,18 @@ class MigrateUtils:
     src = None
     dst = None
     images = None
+    podman_bin = "podman"
+    mksq_bin = "mksquashfs.static"
+    mksq_options = ["-comp", "lz4"]
+    exclude_list = ["/sqout", "/mksq", "/proc", "/sys"]
+    _mksq_inside = "/mksq"
 
-    def __init__(self, src=None, dst=None):
+    def __init__(self, src=None, dst=None, conf=None):
         """
         Inputs:
         src: base directory of source image store
         dst: base directory of destination image store
+        conf: a podman_hpc config object
 
         If src isn't provided, then default to user's default store.
 
@@ -243,6 +248,13 @@ class MigrateUtils:
         self.src_dir = src
         self.dst_dir = dst
         self._lazy_init_called = False
+        if conf:
+            self.podman_bin = conf.podman_bin
+            self.mksq_bin = conf.mksquashfs_bin
+            if not self.src_dir:
+                self.src_dir = conf.graph_root
+            if not self.dst_dir:
+                self.dst_dir = conf.squash_dir
 
     def _lazy_init(self):
         if not self._lazy_init_called:
@@ -257,7 +269,8 @@ class MigrateUtils:
         """
         Helper function to lookup the default image store.
         """
-        cf = "%s/.config/containers/storage.conf" % (os.environ["HOME"])
+        home = os.environ["HOME"]
+        cf = f"{home}/.config/containers/storage.conf"
         with open(cf) as f:
             for line in f:
                 if "#" in line:
@@ -321,12 +334,12 @@ class MigrateUtils:
 
     def _copy_required_layers(self, req_layers):
         for layer in req_layers:
-            lid = layer["id"]
-            fn = "%s.tar-split.gz" % (lid)
+            layer_id = layer["id"]
+            fn = f"{layer_id}.tar-split.gz"
             srcd = os.path.join(self.src.layers_dir, fn)
             dstd = os.path.join(self.dst.layers_dir, fn)
             if not os.path.exists(dstd):
-                logging.debug("Copy %s to %s" % (srcd, dstd))
+                logging.debug(f"Copy {srcd} to {dstd}")
                 copy(srcd, dstd)
         self.dst.add_recs("layers", req_layers)
 
@@ -346,7 +359,7 @@ class MigrateUtils:
             src = os.path.join(sbpath, "link")
             dst = os.path.join(dbpath, "link")
             if not os.path.exists(dst):
-                logging.debug("Copy %s to %s" % (src, dst))
+                logging.debug(f"Copy {src} to{dst}")
                 copy(src, dst)
 
             # Create symlink file
@@ -361,13 +374,15 @@ class MigrateUtils:
             src = self.src.get_squash_filename(link)
             dst = self.dst.get_squash_filename(link)
             if os.path.exists(src) and not os.path.exists(dst):
-                logging.debug("Copy %s to %s" % (src, dst))
+                logging.debug(f"Copy {src} to {dst}")
                 copy(src, dst)
 
     def _mksq(self, img_id, top_id):
         # Get the link name
         ln = self.dst.read_link_file(top_id)
-        _mksqstatic = which("mksquashfs.static")
+        _mksqstatic = self.mksq_bin
+        if not _mksqstatic.startswith("/"):
+            _mksqstatic = which(_mksqstatic)
         tgt = self.dst.get_squash_filename(ln)
         if os.path.exists(tgt):
             logging.info("Squash file already generated")
@@ -375,24 +390,19 @@ class MigrateUtils:
         logging.info(f"Generating squash file {tgt}")
         # To make the squash file we will start up a container
         # with the tgt image and then run mksq in it.
+        # This requires a statically linked mksquashfs
         com = [
-            "podman",
-            "run",
-            "--rm",
-            "-v",
-            f"{_mksqstatic}:/mksq",
-            "-v",
-            "%s/overlay/l/:/sqout" % (self.dst.base),
-            "--entrypoint",
-            "/mksq",
+            self.podman_bin, "run", "--rm",
+            "--root", self.src.base,
+            "-v", f"{_mksqstatic}:{self._mksq_inside}",
+            "-v", f"{self.dst.base}/overlay/l/:/sqout",
+            "--entrypoint", self._mksq_inside,
             img_id,
-            "/",
-            f"/sqout/{ln}.squash",
-            "-comp",
-            "lz4",
+            "/", f"/sqout/{ln}.squash",
         ]
+        com.extend(self.mksq_options)
         # Exclude these
-        for ex in ["/sqout", "/mksq", "/proc", "/sys"]:
+        for ex in self.exclude_list:
             com.extend(["-e", ex])
         proc = Popen(com, stdout=PIPE, stderr=PIPE, env=os.environ)
         out, err = proc.communicate()
@@ -416,7 +426,7 @@ class MigrateUtils:
 
         img_info, fullname = self.src.get_img_info(image)
         if not img_info:
-            logging.error("Image %s not found\n" % (image))
+            logging.error(f"Image {image} not found\n")
             return False
 
         img_id = img_info["id"]
@@ -465,7 +475,7 @@ class MigrateUtils:
         self.dst.refresh()
         img_info, _ = self.dst.get_img_info(image)
         if not img_info:
-            logging.error("Image {image} not found\n")
+            logging.error(f"Image {image} not found\n")
             return False
         img_id = img_info["id"]
         # Get the layers from the manifest

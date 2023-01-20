@@ -31,7 +31,7 @@ class SiteConfig:
                      "default_args", "default_run_args",
                      "additional_stores", "hooks_dir",
                      "localid_var", "tasks_per_node_var", "ntasks_pattern",
-                     "config_home"]
+                     "config_home", "mksquashfs_bin"]
     _valid_templates = ["shared_run_args_template",
                         "graph_root_template",
                         "run_root_template",
@@ -61,6 +61,7 @@ class SiteConfig:
     localid_var = "SLURM_LOCALID"
     tasks_per_node_var = "SLURM_STEP_TASKS_PER_NDOE"
     ntasks_pattern = r'[0-9]+'
+    mksquashfs_bin = "mksquashfs.static"
 
     def __init__(self, squash_dir=None, log_level=None):
 

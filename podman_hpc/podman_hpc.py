@@ -100,7 +100,12 @@ def podhpc(ctx, additional_stores, squash_dir, update_conf, log_level):
         ctx.exit()
 
     # set up site configuration object
-    conf = SiteConfig(squash_dir=squash_dir, log_level=log_level)
+    try:
+        conf = SiteConfig(squash_dir=squash_dir, log_level=log_level)
+    except Exception as ex:
+        sys.stderr.write(f"Error: {ex}... Exiting\n")
+        sys.exit(1)
+
     conf.read_site_modules()
     # migrate was here, is that important?
     conf.config_storage(additional_stores)
@@ -131,7 +136,7 @@ def podhpc(ctx, additional_stores, squash_dir, update_conf, log_level):
 @click.argument("image", type=str)
 def migrate(siteconf, image):
     """Migrate an image to squashed."""
-    mu = MigrateUtils(src=siteconf.graph_root, dst=siteconf.squash_dir)
+    mu = MigrateUtils(conf=siteconf)
     mu.migrate_image(image)
     sys.exit()
 
@@ -142,7 +147,7 @@ def migrate(siteconf, image):
 @click.argument("image", type=str)
 def rmsqi(siteconf, image):
     """Removes a squashed image."""
-    mu = MigrateUtils(dst=siteconf.squash_dir)
+    mu = MigrateUtils(conf=siteconf)
     mu.remove_image(image)
 
 
@@ -167,7 +172,7 @@ def pull(ctx, siteconf, image, podman_args):
     proc.communicate()
     if proc.returncode == 0:
         click.echo(f"INFO: Migrating image to {siteconf.squash_dir}")
-        mu = MigrateUtils(src=siteconf.graph_root, dst=siteconf.squash_dir)
+        mu = MigrateUtils(conf=siteconf)
         mu.migrate_image(image)
     else:
         sys.stderr.write("Pull failed.\n")
