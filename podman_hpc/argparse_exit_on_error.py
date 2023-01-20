@@ -1,4 +1,3 @@
-from argparse import *
 from argparse import ArgumentParser as _ArgumentParser
 
 

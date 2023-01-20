@@ -13,18 +13,6 @@ from multiprocessing import Process
 from subprocess import Popen, PIPE
 
 
-try:
-    from os import waitstatus_to_exitcode
-except ImportError:
-
-    def waitstatus_to_exitcode(status):
-        return (
-            os.WEXITSTATUS(status)
-            if os.WIFEXITED(status)
-            else -1 * os.WTERMSIG(status)
-        )
-
-
 def podman_devnull(cmd, conf):
     """
     Run a command and ignore the output.
