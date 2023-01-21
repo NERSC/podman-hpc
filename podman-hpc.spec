@@ -25,6 +25,7 @@ BuildRequires:  python3
 Requires:       podman
 Requires:       python3-toml
 Requires:       python3-click
+Requires:       mksquashfs-static
 
 %description
 Podman-hpc is a set of scripts around podman to enable it to work
