@@ -7,8 +7,8 @@ import errno
 import subprocess
 import json
 import yaml
+import shutil
 from glob import glob
-from shutil import copyfile
 
 _MOD_ENV = "PODMANHPC_MODULES_DIR"
 
@@ -69,22 +69,43 @@ def resolve_src(src, modulesd=os.path.abspath("")):
 
 
 def do_plugin(rp, mod, modulesd):
+    """
+    set up to do copies and bind mounts
+    handle wildcards appropriately
+    glob over everything just to be safe
+    """
     log(f"Module: {mod}")
+
+    # handle the copy case
     for f in mod["copy"]:
         (src, tgt) = f.split(":")
         src = resolve_src(src, modulesd)
-        tgt2 = os.path.join(rp, tgt[1:])
-        log(f"copying: {src} to {tgt2}")
-        if os.path.exists(tgt2):
-            os.remove(tgt2)
-        tgt_dir = os.path.dirname(tgt2)
-        if not os.path.exists(tgt_dir):
-            os.makedirs(tgt_dir)
-        copyfile(src, tgt2, follow_symlinks=False)
+        if '*' in src:
+            for fp in glob(src):
+                # cut off leading slash
+                tgt2 = os.path.join(rp, fp[1:])
+                if os.path.exists(tgt2):
+                    os.remove(tgt2)
+                tgt_dir = os.path.dirname(tgt2)
+                if not os.path.exists(tgt_dir):
+                    os.makedirs(tgt_dir)
+                log(f"Copying: {fp} to {tgt2}")
+                shutil.copyfile(fp, tgt2, follow_symlinks=False)
+        else:
+            tgt2 = os.path.join(rp, tgt[1:])
+            if os.path.exists(tgt2):
+                os.remove(tgt2)
+            tgt_dir = os.path.dirname(tgt2)
+            if not os.path.exists(tgt_dir):
+                os.makedirs(tgt_dir)
+            log(f"Copying {src} to {tgt2}")
+            shutil.copyfile(src, tgt2, follow_symlinks=False)
+
+    # handle the bind case
     for f in mod["bind"]:
         (src, tgt) = f.split(":")
         src = resolve_src(src, modulesd)
-        if src.endswith("*"):
+        if '*' in src:
             for fp in glob(src):
                 tgt2 = os.path.join(rp, fp[1:])
                 log(f"mounting: {fp} to {tgt2}")

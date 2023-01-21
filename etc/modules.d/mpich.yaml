@@ -18,8 +18,8 @@ bind:
   - /dev/shm:/dev/shm
   - /dev/ss0:/dev/ss0
   - /dev/cxi*:/dev/cxi*
-  - /usr/lib/shifter/mpich-2.2/:/opt/udiImage/modules/mpich
-  - /opt/cray/libfabric/1.15.2.0/lib64/libfabric:/opt/cray/libfabric/1.15.2.0/lib64/libfabric
+  - /usr/lib/shifter/mpich-2.2:/opt/udiImage/modules/mpich
+  - /opt/cray/libfabric/*/lib64/libfabric:/opt/cray/libfabric/*/lib64/libfabric
   - /var/spool/slurmd:/var/spool/slurmd
   - /run/munge:/run/munge
   - /run/nscd:/run/nscd
