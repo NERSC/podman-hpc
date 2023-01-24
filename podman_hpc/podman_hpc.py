@@ -130,6 +130,15 @@ def podhpc(ctx, additional_stores, squash_dir, update_conf, log_level):
     ctx.obj = conf
 
 
+# podman-hpc infohpc subcommand ############################################
+@podhpc.command(options_metavar="[options]")
+@pass_siteconf
+def infohpc(siteconf):
+    """Dump configuration information for podman_hpc."""
+    siteconf.dump_config()
+    sys.exit()
+
+
 # podman-hpc migrate subcommand ############################################
 @podhpc.command(options_metavar="[options]")
 @pass_siteconf
