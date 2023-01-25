@@ -346,7 +346,7 @@ def monitor(sockfile, ntasks, container_name, conf):
     s.bind(sockfile)
     ct = 0
     while True:
-        s.listen(1)
+        s.listen()
         conn, addr = s.accept()
         ct += 1
         if ct == ntasks:
@@ -364,8 +364,8 @@ def send_complete(sockfile, lid):
         s.connect(sockfile)
         s.send(bytes(lid, 'utf-8'))
         s.close()
-    except Exception:
-        sys.stderr.write(f"send_complete failed for {lid}\n")
+    except Exception as ex:
+        sys.stderr.write(f"send_complete failed for {lid}\n{ex}\n")
 
 
 def main():
