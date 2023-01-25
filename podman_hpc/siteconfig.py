@@ -59,7 +59,7 @@ class SiteConfig:
     mount_program = "fuse-overlayfs-warp"
     runtime = "runc"
     localid_var = "SLURM_LOCALID"
-    tasks_per_node_var = "SLURM_STEP_TASKS_PER_NDOE"
+    tasks_per_node_var = "SLURM_STEP_TASKS_PER_NODE"
     ntasks_pattern = r'[0-9]+'
     mksquashfs_bin = "mksquashfs.static"
     source = dict()
