@@ -62,6 +62,7 @@ class SiteConfig:
     tasks_per_node_var = "SLURM_STEP_TASKS_PER_NODE"
     ntasks_pattern = r'[0-9]+'
     mksquashfs_bin = "mksquashfs.static"
+    shared_run = False
     source = dict()
 
     def __init__(self, squash_dir=None, log_level=None):
@@ -325,6 +326,8 @@ class SiteConfig:
             if args.get(cli_arg, False):
                 cmds.extend(mconf.get("additional_args", []))
                 cmds.extend(["-e", f"{mconf['env']}=1"])
+                if mconf.get("shared_run"):
+                    self.shared_run = True
         if self.log_level:
             cmds.extend(["--log-level", self.log_level])
         return cmds
