@@ -33,6 +33,8 @@ The list of configurable values is:
 * localid_var: (str) environment variable to determine the local node rank (default: `SLURM_LOCALID`)
 * tasks_per_node_var: (str) environment variable to determine the tasks per node (default: `SLURM_STEP_TASKS_PER_NDOE`)
 * ntasks_pattern: (str) regular expression pattern to filter the tasks per node (default: `[0-9]+`)
+* wait_timeout: (str) timeout in seconds to wait for a shared-run container to start (default: 10)
+* wait_poll_interval: (str) interval in seconds to poll for a shared-run container to start (default: 0.2)
 
 ### Templating
 

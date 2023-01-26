@@ -268,6 +268,7 @@ def shared_run(conf, run_args, **site_opts):
     # Start monitor and run threads
     monitor_thread = None
     run_thread = None
+    proc = None
     if (localid is None or int(localid) == 0):
         monitor_thread = Process(target=monitor, args=(sock_name, ntasks,
                                                        container_name, conf))
@@ -275,21 +276,41 @@ def shared_run(conf, run_args, **site_opts):
         run_thread = Process(target=shared_run_exec, args=(run_cmd, conf.env))
         run_thread.start()
 
-    # wait for container to exist
-    comm = ["container", "exists", container_name]
-    while podman_devnull(comm, conf) != 0:
-        time.sleep(0.2)
-    comm = ["wait", "--condition", "running", container_name]
-    podman_devnull(comm, conf)
-    proc = Popen(exec_cmd, env=conf.env)
-    proc.communicate()
-    send_complete(sock_name, localid)
-    # Close out threads
-    if monitor_thread:
-        monitor_thread.join()
-    if run_thread:
-        run_thread.join()
-    sys.exit(proc.returncode)
+    try:
+        # wait for container to exist
+        comm = ["container", "exists", container_name]
+        start_time = time.time()
+        while podman_devnull(comm, conf) != 0:
+            time.sleep(conf.wait_poll_interval)
+            if time.time() - start_time > conf.wait_timeout:
+                msg = "Timeout waiting for shared-run start"
+                raise OSError(msg)
+            if run_thread and run_thread.exitcode:
+                raise OSError("Failed to start container")
+        comm = ["wait", "--condition", "running", container_name]
+        podman_devnull(comm, conf)
+        proc = Popen(exec_cmd, env=conf.env)
+        proc.communicate()
+        send_complete(sock_name, localid)
+        # Close out threads
+        if monitor_thread:
+            monitor_thread.join()
+        if run_thread:
+            run_thread.join()
+    except Exception as ex:
+        sys.stderr.write(str(ex))
+        if monitor_thread:
+            sys.stderr.write("Killing monitor thread")
+            monitor_thread.kill()
+        if run_thread:
+            run_thread.kill()
+        if os.path.exists(sock_name):
+            os.remove(sock_name)
+    finally:
+        exit_code = 1
+        if proc:
+            exit_code = proc.returncode
+        sys.exit(exit_code)
 
 
 # podman-hpc call_podman subcommand (default, hidden, passthrough) #########
@@ -343,7 +364,9 @@ def call_podman(ctx, siteconf, help, podman_args, **site_opts):
 
 def shared_run_exec(run_cmd, env):
     proc = Popen(run_cmd, stdout=PIPE, stderr=PIPE, env=env)
-    proc.communicate()
+    out, err = proc.communicate()
+    if proc.returncode != 0:
+        sys.stderr.write(err.decode())
 
 
 def monitor(sockfile, ntasks, container_name, conf):

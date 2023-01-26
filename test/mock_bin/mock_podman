@@ -11,6 +11,17 @@ elif [ $(echo $@|grep -c 'mksq ') -gt 0 ] ; then
     P=$(echo $@|sed 's/.*mksq -v //'|sed 's/:.*//')
     SQ=$(echo $@|sed 's|.*/sqout/||'|sed 's/ .*//')
     touch $P/$SQ
+elif [ $(echo $@|grep -c 'container exists ') -gt 0 ] ; then
+    if [ ! -z "$MOCK_FAILURE" ] ; then
+        echo "no container" >& 2
+        echo $@ >> $MOCK_OUT
+        exit 1
+    fi
+elif [ $(echo $@|grep -c ' run ') -gt 0 ] && [ ! -z "$MOCK_FAILURE" ] ;then
+    uid=$(echo $@|sed 's/.*--name //'|sed 's/ .*//')
+    echo "Failed to start $uid" >& 2
+    echo $@ >> $MOCK_OUT
+    exit 1
 elif [ $(echo $@|grep -c 'run ') -gt 0 ] ; then
     echo "bogusid"
 fi
