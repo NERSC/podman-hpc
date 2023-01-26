@@ -4,6 +4,15 @@ import pytest
 
 
 @pytest.fixture
+def user():
+    try:
+        user = os.getlogin()
+    except Exception:
+        user = os.environ["USER"]
+    return user
+
+
+@pytest.fixture
 def fix_paths(monkeypatch):
     test_dir = os.path.dirname(__file__)
     mock_dir = os.path.join(test_dir, "mock_bin")
@@ -33,10 +42,9 @@ def test_conf_defaults(fix_paths):
     assert conf.env is not None
 
 
-def test_conf_file(fix_paths, conf_file, monkeypatch):
+def test_conf_file(fix_paths, conf_file, monkeypatch, user):
     conf = config.SiteConfig(squash_dir="/tmp")
     uid = os.getuid()
-    user = os.getlogin()
     assert conf.podman_bin == "/bin/sleep"
     assert conf.mount_program == "/bin/sleep"
     assert "SLURM_*" in conf.shared_run_exec_args
@@ -90,7 +98,7 @@ def test_conf_funcs(fix_paths, monkeypatch, tmp_path, capsys):
     assert "SLURM_LOCALID" in captured.out
 
 
-def test_typing(fix_paths, monkeypatch, tmp_path):
+def test_typing(fix_paths, monkeypatch, tmp_path, user):
     monkeypatch.setenv("PODMANHPC_CONFIG_HOME", str(tmp_path))
     monkeypatch.setenv("PODMANHPC_DEFAULT_ARGS", "a,b")
     monkeypatch.setenv("PODMANHPC_DEFAULT_RUN_ARGS_TEMPLATE",
@@ -99,5 +107,4 @@ def test_typing(fix_paths, monkeypatch, tmp_path):
     assert isinstance(conf.default_args, list)
     assert conf.default_args == ["a", "b"]
     uid = os.getuid()
-    user = os.getlogin()
     assert conf.default_run_args == [str(uid), user]

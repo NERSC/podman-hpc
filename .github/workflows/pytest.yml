@@ -21,6 +21,9 @@ jobs:
         run: |
           pip install toml pyyaml click pytest-cov pytest-mock
 
+      - name: Create a motd
+        run: echo "This is a motd" > /etc/motd
+
       - name: Run test suite
         run: |
           pytest
