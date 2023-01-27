@@ -2,47 +2,122 @@ import sys
 import os
 import shutil
 import toml
-import yaml
+import re
+from yaml import load
+from yaml import FullLoader
 from copy import deepcopy
 from glob import glob
 
-_MOD_ENV = "PODMANHPC_MODULES_DIR"
-_HOOKS_ENV = "PODMANHPC_HOOKS_DIR"
+_ENV_PREFIX = "PODMANHPC"
+_MOD_ENV = f"{_ENV_PREFIX}_MODULES_DIR"
 _HOOKS_ANNO = "podman_hpc.hook_tool"
+_CONF_ENV = f"{_ENV_PREFIX}_CONFIG_FILE"
 
 
 class SiteConfig:
     """
     Class to represent site specific configurations for Podman-HPC.
+
+    Precedence order lowest to highest:
+    - Built-in defaults
+    - Config file
+    - Environment variables
     """
 
+    _default_conf_file = "/etc/podman_hpc/podman_hpc.yaml"
+    _valid_params = ["podman_bin", "mount_program", "modules_dir",
+                     "shared_run_exec_args", "shared_run_command",
+                     "graph_root", "run_root",
+                     "default_args", "default_run_args",
+                     "additional_stores", "hooks_dir",
+                     "localid_var", "tasks_per_node_var", "ntasks_pattern",
+                     "config_home"]
+    _valid_templates = ["shared_run_args_template",
+                        "graph_root_template",
+                        "run_root_template",
+                        "default_args_template",
+                        "default_run_args_template",
+                        "additional_stores_template",
+                        "config_home_template"
+                        ]
+    _uid = os.getuid()
+    _xdg_base = f"/tmp/{_uid}_hpc"
+    config_home = f"{_xdg_base}/config"
+    run_root = _xdg_base
+    additional_stores = []
+    default_args = []
+    hooks_dir = f"{sys.prefix}/share/containers/oci/hooks.d"
+    graph_root = f"{_xdg_base}/storage"
+    squash_dir = os.environ.get(
+        "SQUASH_DIR", f'{os.environ.get("SCRATCH", "/tmp")}/storage'
+    )
+    modules_dir = "/etc/podman_hpc/modules.d"
+    shared_run_exec_args = ["-e", "SLURM_*", "-e", "PALS_*", "-e", "PMI_*"]
+    default_run_args = []
+    shared_run_command = ["sleep", "infinity"]
+    podman_bin = "podman"
+    mount_program = "fuse-overlayfs-warp"
+    runtime = "runc"
+    localid_var = "SLURM_LOCALID"
+    tasks_per_node_var = "SLURM_STEP_TASKS_PER_NDOE"
+    ntasks_pattern = r'[0-9]+'
+
     def __init__(self, squash_dir=None, log_level=None):
-        self.uid = os.getuid()
+
+        # getlogin may fail on a compute node
         try:
             self.user = os.getlogin()
         except Exception:
             self.user = os.environ["USER"]
-        self.xdg_base = f"/tmp/{self.uid}_hpc"
-        self.run_root = self.xdg_base
-        self.graph_root = f"{self.xdg_base}/storage"
-        self.squash_dir = squash_dir or os.environ.get(
-            "SQUASH_DIR", f'{os.environ["SCRATCH"]}/storage'
-        )
-        self.modules_dir = os.environ.get(
-            _MOD_ENV, "/etc/podman_hpc/modules.d"
-        )
+        # TODO: move these as a test at the end
         self.podman_bin = self.trywhich("podman")
         self.mount_program = self.trywhich("fuse-overlayfs-wrap")
-        self.conmon_bin = self.trywhich("conmon")
         try:
             self.runtime = self.trywhich("crun")
         except OSError:
             self.runtime = self.trywhich("runc")
-        self.options = []
+        # self.options = []
+        self.conf_file_data = {}
+        self._read_config_file()
+        for param in self._valid_templates:
+            self._check_and_set(param)
+        for param in self._valid_params:
+            self._check_and_set(param)
+
+        self.read_site_modules()
+        # TODO: Allow this to be over-rideable
+        self.default_args = [
+                "--root", self.graph_root,
+                "--runroot", self.run_root,
+                "--storage-opt",
+                f"additionalimagestore={self.additionalimagestore()}",
+                "--storage-opt",
+                f"mount_program={self.mount_program}",
+                "--cgroup-manager", "cgroupfs",
+                ]
+        self.default_run_args = [
+                "--hooks-dir", self.hooks_dir,
+                "-e", f"{_MOD_ENV}={self.modules_dir}",
+                "--annotation", f"{_HOOKS_ANNO}=true",
+                "--security-opt", "seccomp=unconfined",
+                ]
         self.log_level = log_level
+
+    def dump_config(self):
+        """
+        Debug method to dump the configuration
+        """
+
+        for param in self._valid_params:
+            val = str(getattr(self, param))
+            print(f"{param}: {val}")
+        print(f"active_modules: {self.active_modules}")
 
     @staticmethod
     def trywhich(cmd, *args, **kwargs):
+        """
+        Use which and raise an error if it can't be found.
+        """
         res = shutil.which(cmd, *args, **kwargs)
         if res is None:
             raise OSError(
@@ -50,7 +125,70 @@ class SiteConfig:
             )
         return res
 
+    def _check_and_set(self, attr: str, envname=None, parname=None):
+        """
+        Helper function to apply the right precedence
+        """
+        if not parname:
+            parname = attr
+        if not envname:
+            uppar = attr.upper()
+            envname = f"{_ENV_PREFIX}_{uppar}"
+
+        setval = False
+        if envname in os.environ:
+            setval = True
+            newval = os.environ[envname]
+        elif parname in self.conf_file_data:
+            setval = True
+            newval = self.conf_file_data[parname]
+        if setval and attr.endswith("_template"):
+            setattr(self, attr, newval)
+            newval = self._apply_template(newval)
+            attr = attr.replace("_template", "")
+
+        # TODO: add type validation (e.g. str or list)
+        if setval:
+            setattr(self, attr, newval)
+
+    def _apply_template(self, templ):
+        """
+        Helper function to convert templates
+        """
+        def _templ(val):
+            val = val.replace("{{ user }}", self.user)
+            val = val.replace("{{ uid }}", str(self._uid))
+            for pat in re.findall(r'{{ env\.[A-Za-z0-9]+ }}', val):
+                envname = pat.replace("{{ env.", "").replace(" }}", "")
+                val = val.replace(pat, os.environ[envname])
+            return val
+
+        if isinstance(templ, list):
+            newlist = []
+            for item in templ:
+                newlist.append(_templ(item))
+            return newlist
+        elif isinstance(templ, str):
+            return _templ(templ)
+        else:
+            raise ValueError("Can handle template type")
+
+    def _read_config_file(self):
+        """
+        Read the global config file
+        """
+        config_file = os.environ.get(_CONF_ENV, self._default_conf_file)
+        if not os.path.exists(config_file):
+            return
+        self.conf_file_data = load(open(config_file), Loader=FullLoader)
+        for p in self.conf_file_data:
+            if p not in self._valid_params and p not in self._valid_templates:
+                raise ValueError(f"Unrecongnized Option: {p}")
+
     def get_default_store_conf(self):
+        """
+        Generate a default storage conf object
+        """
         return {
             "storage": {
                 "driver": "overlay",
@@ -71,6 +209,9 @@ class SiteConfig:
         }
 
     def get_default_containers_conf(self):
+        """
+        Generate a default containers conf object
+        """
         return {
             "engine": {
                 "cgroup_manager": "cgroupfs",
@@ -80,8 +221,10 @@ class SiteConfig:
             },
         }
 
-    def get_config_home(self):
-        return f"{self.xdg_base}/config"
+    def additionalimagestore(self):
+        ais = [self.squash_dir]
+        ais.extend(self.additional_stores)
+        return ','.join(ais)
 
     def config_storage(self, additional_stores=None):
         """
@@ -104,10 +247,12 @@ class SiteConfig:
     def config_env(self, hpc):
         """
         Generate the environment setup
+
+        TODO: Redo this
         """
         new_env = deepcopy(os.environ)
         if hpc:
-            new_env["XDG_CONFIG_HOME"] = self.get_config_home()
+            new_env["XDG_CONFIG_HOME"] = self.config_home
             new_env.pop("XDG_RUNTIME_DIR", None)
         self.env = new_env
 
@@ -116,39 +261,40 @@ class SiteConfig:
         Write out a conf file
         """
         os.makedirs(
-            f"/tmp/containers-user-{self.uid}/containers", exist_ok=True
+            f"/tmp/containers-user-{self._uid}/containers", exist_ok=True
         )
-        os.makedirs(f"{self.get_config_home()}/containers", exist_ok=True)
-        fp = os.path.join(self.get_config_home(), "containers", filename)
+        os.makedirs(f"{self.config_home}/containers", exist_ok=True)
+        fp = os.path.join(self.config_home, "containers", filename)
         if not os.path.exists(fp) or overwrite:
             with open(fp, "w") as f:
                 toml.dump(data, f)
 
     def export_storage_conf(self, filename="storage.conf", overwrite=False):
+        """
+        Write out the storage.conf file
+        """
         self._write_conf(filename, self.storage_conf, overwrite=overwrite)
 
     def export_containers_conf(
         self, filename="containers.conf", overwrite=False
     ):
+        """
+        Write out the containers.conf file
+        """
         self._write_conf(filename, self.container_conf, overwrite=overwrite)
 
     def get_cmd_extensions(self, subcommand, args):
-        cmds = []
+        """
+        Generate the podman command-line parameters
+
+        subcomand: run, images, etc
+        """
+        cmds = self.default_args
         if subcommand == "run":
-            cmds.extend(
-                [
-                    "--hooks-dir",
-                    os.environ.get(
-                        _HOOKS_ENV,
-                        f"{sys.prefix}/share/containers/oci/hooks.d",
-                    ),
-                    "-e",
-                    f"{_MOD_ENV}={self.modules_dir}",
-                    "--annotation",
-                    f"{_HOOKS_ANNO}=true",
-                ]
-            )
+            cmds.extend(self.default_run_args)
         for mod, mconf in self.sitemods.get(subcommand, {}).items():
+            if 'cli_arg' not in mconf:
+                continue
             cli_arg = mconf["cli_arg"].replace("-", "_")
             if args.get(cli_arg, False):
                 cmds.extend(mconf.get("additional_args", []))
@@ -164,7 +310,10 @@ class SiteConfig:
     # flags for any podman subcommand.
     def read_site_modules(self):
         mods = {}
+        active_mods = []
         for modfile in glob(f"{self.modules_dir}/*.yaml"):
-            mod = yaml.load(open(modfile), Loader=yaml.FullLoader)
+            mod = load(open(modfile), Loader=FullLoader)
             mods[mod["name"]] = mod
+            active_mods.append(modfile)
+        self.active_modules = active_mods
         self.sitemods = {"run": mods, "shared-run": mods}

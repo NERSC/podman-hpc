@@ -1,34 +1,24 @@
 import podman_hpc.podman_hpc as phpc
 import sys
 import os
+import pytest
 
 
-def test_conf():
-    conf = phpc.config()
-    home = conf.get_config_home()
-    assert home is not None
+@pytest.fixture
+def fix_paths(monkeypatch):
+    test_dir = os.path.dirname(__file__)
+    mock_dir = os.path.join(test_dir, "mock_bin")
+    bin_dir = os.path.join(test_dir, "..", "bin")
+    monkeypatch.setenv("PATH", mock_dir, prepend=os.pathsep)
+    monkeypatch.setenv("PATH", bin_dir, prepend=os.pathsep)
 
 
-def test_sconf():
-    conf = phpc.config()
-    sconf = conf.get_default_store_conf()
-    assert 'storage' in sconf
-    assert 'options' in sconf['storage']
-    assert 'mount_program' in sconf['storage']['options']
-
-
-def test_cconf():
-    conf = phpc.config()
-    sconf = conf.get_default_containers_conf()
-    assert 'engine' in sconf
-    assert 'containers' in sconf
-
-
-def test_main(monkeypatch):
-    sys.argv = ["podman_hpc", "--help"]
+def test_main(monkeypatch, fix_paths):
+    sys.argv = ["podman_hpc", "run", "--help"]
     global args_passed
+    args_passed = []
 
-    def mock_exit():
+    def mock_exit(exit_code):
         return 0
 
     def mock_execve(bin, args, path):
@@ -42,6 +32,5 @@ def test_main(monkeypatch):
     assert "--help" in args_passed
 
     sys.argv = ["podman_hpc", "run", "-it", "alpine"]
-    monkeypatch.setattr(os, "execve", mock_execve)
     phpc.main()
     assert "run" in args_passed

@@ -55,13 +55,11 @@ def bind_mount(src, tgt):
 def ldconfig():
     if not os.path.exists("/sbin/ldconfig"):
         return
-    log(subprocess.check_output(["/bin/ls"]).decode("utf-8"))
     ret = "unknown"
     try:
         ret = subprocess.check_output(["/sbin/ldconfig"])
     except subprocess.CalledProcessError:
-        log("ldconfig failed")
-        log(ret)
+        log(f"ldconfig failed: {ret}")
 
 
 def resolve_src(src, modulesd=os.path.abspath("")):
@@ -76,8 +74,7 @@ def do_plugin(rp, mod, modulesd):
     handle wildcards appropriately
     glob over everything just to be safe
     """
-    log(mod)
-    log(rp)
+    log(f"Module: {mod}")
 
     # handle the copy case
     for f in mod["copy"]:
@@ -92,7 +89,7 @@ def do_plugin(rp, mod, modulesd):
                 tgt_dir = os.path.dirname(tgt2)
                 if not os.path.exists(tgt_dir):
                     os.makedirs(tgt_dir)
-                log("%s %s" % (fp, tgt2))
+                log(f"Copying: {fp} to {tgt2}")
                 shutil.copyfile(fp, tgt2, follow_symlinks=False)
         else:
             tgt2 = os.path.join(rp, tgt[1:])
@@ -101,26 +98,22 @@ def do_plugin(rp, mod, modulesd):
             tgt_dir = os.path.dirname(tgt2)
             if not os.path.exists(tgt_dir):
                 os.makedirs(tgt_dir)
-            log("%s %s" % (src, tgt2))
+            log(f"Copying {src} to {tgt2}")
             shutil.copyfile(src, tgt2, follow_symlinks=False)
 
     # handle the bind case
     for f in mod["bind"]:
         (src, tgt) = f.split(":")
-        print("src:", src)
-        print("tgt:", tgt)
         src = resolve_src(src, modulesd)
         if '*' in src:
             for fp in glob(src):
                 tgt2 = os.path.join(rp, fp[1:])
-                print("fp:", fp)
-                print("tgt", tgt)
+                log(f"mounting: {fp} to {tgt2}")
                 bind_mount(fp, tgt2)
         else:
             tgt2 = os.path.join(rp, tgt[1:])
+            log(f"mounting: {src} to {tgt2}")
             bind_mount(src, tgt2)
-            print("src", src)
-            print("tgt2", tgt2)
 
 
 def read_confs(mdir):
@@ -150,19 +143,21 @@ def main():
     lf = cf_env.get("LOG_PLUGIN")
     if lf:
         logger = open(lf, "w")
+    log("input")
     log(json.dumps(inp, indent=2))
-    log(os.environ)
+    log("config.json")
     log(json.dumps(cf, indent=2))
     rp = cf["root"]["path"]
 
     setns(pid, "mnt")
     os.chroot("/")
+    log(json.dumps(plug_conf, indent=2))
     for m in plug_conf:
         if plug_conf[m]["env"] in cf_env:
             log("Loading %s" % (m))
             do_plugin(rp, plug_conf[m], plug_conf_fn)
     ret = os.chroot(rp)
-    log(ret)
+    log(f"chroot return: {ret}")
 
     ldconfig()
 

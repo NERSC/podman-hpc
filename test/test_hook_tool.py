@@ -4,29 +4,31 @@ import io
 import os
 import json
 import ctypes
-import tempfile
 import time
 
 
 _libc = ctypes.CDLL(ctypes.util.find_library('c'), use_errno=True)
 
 
-def test_conf(monkeypatch):
+def test_conf(monkeypatch, tmp_path):
     tdir = os.path.dirname(__file__)
     # conf = os.path.join(tdir, "test.yaml")
     conf = os.path.join(tdir, "modules.d")
-    tempd = tempfile.TemporaryDirectory(dir="/tmp")
-    rdir = os.path.join(tempd.name, "root")
+    log_file = os.path.join(tmp_path, "log.out")
+    rdir = os.path.join(tmp_path, "root")
     os.mkdir(rdir)
     os.mkdir(os.path.join(rdir, "etc"))
-    env = ["ENABLE_MODULE1=1"]
+    env = ["ENABLE_MODULE1=1",
+           f"LOG_PLUGIN={log_file}",
+           f"{ht._MOD_ENV}={conf}",
+           ]
     cconf = {
         "root": {
             "path": rdir
             },
         "process": {"env": env}
     }
-    with open(os.path.join(tempd.name, "config.json"), "w") as f:
+    with open(os.path.join(tmp_path, "config.json"), "w") as f:
         json.dump(cconf, f)
     pid = os.fork()
     if pid == 0:
@@ -52,14 +54,13 @@ def test_conf(monkeypatch):
            }
     sys.stdin = io.StringIO(json.dumps(hconf))
     here = os.getcwd()
-    sys.argv = [sys.argv[0], conf]
-    os.chdir(tempd.name)
+    sys.argv = [sys.argv[0]]
+    os.chdir(tmp_path)
 
     def mock_chroot(dir):
         return 0
 
     monkeypatch.setattr(os, "chroot", mock_chroot)
-    monkeypatch.setenv("LOG_PLUGIN", "/tmp/log.out")
     ht.main()
     os.chdir(here)
     motd = os.path.join(rdir, "a/motd")
@@ -71,5 +72,6 @@ def test_conf(monkeypatch):
     null2 = os.path.join(rdir, "null2")
     assert not os.path.exists(null2)
     os.wait()
-    ret = _libc.umount2(null, 2)
-    print(ret)
+    _libc.umount2(null, 2)
+    assert os.path.exists(log_file)
+    # print(ret)

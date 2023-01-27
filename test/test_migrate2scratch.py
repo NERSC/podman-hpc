@@ -41,6 +41,7 @@ def dst():
 def test_init_storage(src):
     with TemporaryDirectory() as dst:
         mu = MigrateUtils(src=src, dst=dst)
+        mu._lazy_init()
         mu.dst.init_storage()
         idir = os.path.join(dst, "overlay-images")
         assert os.path.exists(idir)
@@ -61,6 +62,7 @@ def test_migrate_remove(src, tmp_path, mocker):
     # Mock Popen
     popen = mocker.patch("podman_hpc.migrate2scratch.Popen")
     mu = MigrateUtils(src=src, dst=tmp_path)
+    mu._lazy_init()
     mu.dst.init_storage()
     imgf = os.path.join(tmp_path, "overlay-images/images.json")
     with open(imgf, "w") as f:
