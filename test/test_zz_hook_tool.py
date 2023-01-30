@@ -1,16 +1,20 @@
 import podman_hpc.hook_tool as ht
+import podman_hpc.configure_hooks as ch
 import sys
 import io
 import os
 import json
 import ctypes
 import time
+import pytest
 
 
 _libc = ctypes.CDLL(ctypes.util.find_library('c'), use_errno=True)
 
 
-def test_conf(monkeypatch, tmp_path):
+@pytest.mark.skipif(not os.path.exists("/proc"),
+                    reason="requires running on linux system")
+def test_hook(monkeypatch, tmp_path):
     tdir = os.path.dirname(__file__)
     # conf = os.path.join(tdir, "test.yaml")
     conf = os.path.join(tdir, "modules.d")
@@ -41,12 +45,7 @@ def test_conf(monkeypatch, tmp_path):
         time.sleep(4)
         os._exit(0)
     time.sleep(1)
-#    uidmapfile = '/proc/self/uid_map'
-#    uidmap = "0 %d 1" % os.getuid()
     ht.setns(pid, "user")
-#    print("Writing uidmap = '%s' to '%s'" % (uidmap, uidmapfile))
-#    with open(uidmapfile,'w') as file_:
-#        file_.write(uidmap)
 
     hconf = {
             'pid': pid,
@@ -74,4 +73,18 @@ def test_conf(monkeypatch, tmp_path):
     os.wait()
     _libc.umount2(null, 2)
     assert os.path.exists(log_file)
-    # print(ret)
+
+
+def test_conf_hook(monkeypatch, tmp_path, capsys):
+    hook_out = os.path.join(tmp_path, "02-hook_tool.json")
+
+    def mock_exit(exit_code):
+        return 0
+
+    sys.argv = ["podman_hpc", "--hooksd", str(tmp_path)]
+    monkeypatch.setattr(sys, "exit", mock_exit)
+    ch.main()
+    captured = capsys.readouterr()
+    assert "Successfully" in captured.out
+    ho = json.load(open(hook_out))
+    assert "version" in ho

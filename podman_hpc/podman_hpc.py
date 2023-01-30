@@ -9,18 +9,21 @@ import click
 from . import click_passthrough as cpt
 from .migrate2scratch import MigrateUtils
 from .siteconfig import SiteConfig
+from multiprocessing import Process
+from subprocess import Popen, PIPE
 
 
-try:
-    from os import waitstatus_to_exitcode
-except ImportError:
-
-    def waitstatus_to_exitcode(status):
-        return (
-            os.WEXITSTATUS(status)
-            if os.WIFEXITED(status)
-            else -1 * os.WTERMSIG(status)
-        )
+def podman_devnull(cmd, conf):
+    """
+    Run a command and ignore the output.
+    Returns the exit code
+    """
+    newcmd = [conf.podman_bin]
+    newcmd.extend(conf.get_cmd_extensions(cmd[0], None))
+    newcmd.extend(cmd)
+    proc = Popen(newcmd, stdout=PIPE, stderr=PIPE)
+    proc.communicate()
+    return proc.returncode
 
 
 # function to specify help message formatting to mimic the podman help page.
@@ -37,7 +40,8 @@ def podman_format(self, ctx, formatter):
             self.format_epilog(ctx, formatter)
 
 
-# parse the `podman --help` page so it can be added as a custom epilog to main command help
+# parse the `podman --help` page so it can be added as a custom epilog to
+# main command help
 initenv = os.environ
 if "XDG_RUNTIME_DIR" in os.environ:
     os.environ.pop("XDG_RUNTIME_DIR")
@@ -96,7 +100,12 @@ def podhpc(ctx, additional_stores, squash_dir, update_conf, log_level):
         ctx.exit()
 
     # set up site configuration object
-    conf = SiteConfig(squash_dir=squash_dir, log_level=log_level)
+    try:
+        conf = SiteConfig(squash_dir=squash_dir, log_level=log_level)
+    except Exception as ex:
+        sys.stderr.write(f"Error: {ex}... Exiting\n")
+        sys.exit(1)
+
     conf.read_site_modules()
     # migrate was here, is that important?
     conf.config_storage(additional_stores)
@@ -109,7 +118,6 @@ def podhpc(ctx, additional_stores, squash_dir, update_conf, log_level):
     for k, v in conf.sitemods.get(ctx.invoked_subcommand, {}).items():
         if 'cli_arg' not in v:
             continue
-        print(v)
         invcmd = click.option(
             f"--{v['cli_arg']}",
             is_flag=True,
@@ -117,8 +125,18 @@ def podhpc(ctx, additional_stores, squash_dir, update_conf, log_level):
             help=v.get("help"),
         )(invcmd)
 
-    # save the site config to a context object so it can be passed to subcommands
+    # save the site config to a context object so it can be passed to
+    # subcommands
     ctx.obj = conf
+
+
+# podman-hpc infohpc subcommand ############################################
+@podhpc.command(options_metavar="[options]")
+@pass_siteconf
+def infohpc(siteconf):
+    """Dump configuration information for podman_hpc."""
+    siteconf.dump_config()
+    sys.exit()
 
 
 # podman-hpc migrate subcommand ############################################
@@ -127,7 +145,7 @@ def podhpc(ctx, additional_stores, squash_dir, update_conf, log_level):
 @click.argument("image", type=str)
 def migrate(siteconf, image):
     """Migrate an image to squashed."""
-    mu = MigrateUtils(dst=siteconf.squash_dir)
+    mu = MigrateUtils(conf=siteconf)
     mu.migrate_image(image)
     sys.exit()
 
@@ -138,7 +156,7 @@ def migrate(siteconf, image):
 @click.argument("image", type=str)
 def rmsqi(siteconf, image):
     """Removes a squashed image."""
-    mu = MigrateUtils(dst=siteconf.squash_dir)
+    mu = MigrateUtils(conf=siteconf)
     mu.remove_image(image)
 
 
@@ -155,16 +173,16 @@ def rmsqi(siteconf, image):
 @click.argument("image")
 def pull(ctx, siteconf, image, podman_args):
     """Pulls an image to a local repository and makes a squashed copy."""
-    pid = os.fork()
-    if pid == 0:
-        cmd = [siteconf.podman_bin, "pull"]
-        cmd.extend(podman_args)
-        cmd.append(image)
-        os.execve(cmd[0], cmd, os.environ)
-    pid, status = os.wait()
-    if status == 0:
+    cmd = [siteconf.podman_bin, "pull"]
+    cmd.extend(podman_args)
+    cmd.extend(siteconf.default_args)
+    cmd.append(image)
+    proc = Popen(cmd)
+    proc.communicate()
+    if proc.returncode == 0:
         click.echo(f"INFO: Migrating image to {siteconf.squash_dir}")
-        ctx.invoke(migrate, image=image)
+        mu = MigrateUtils(conf=siteconf)
+        mu.migrate_image(image)
     else:
         sys.stderr.write("Pull failed.\n")
 
@@ -177,20 +195,22 @@ def pull(ctx, siteconf, image, podman_args):
     options_metavar="[options]",
 )
 @pass_siteconf
-@click.argument("image")
 @click.argument(
-    "container-cmd",
+    "run-args",
     nargs=-1,
     type=click.UNPROCESSED,
-    metavar="[COMMAND [ARG...]]",
+    metavar="IMAGE [COMMAND [ARG...]]",
 )
-def shared_run(conf, image, container_cmd, **site_opts):
+def shared_run(conf, run_args, **site_opts):
     """Launch a single container and exec many threads in it
 
     This is the recommended way to launch a container from a parallel launcher
-    such as Slurm `srun` or `mpirun`. One container will be started (per node), and all
-    process tasks will then be launched into that container via `exec` subcommand.
-    When all `exec` processes have concluded, the container will close and remove itself.
+    such as Slurm `srun` or `mpirun`. One container will be started (per node),
+    and all process tasks will then be launched into that container via `exec`
+    subcommand.
+
+    When all `exec` processes have concluded, the container will close and
+    remove itself.
 
     For valid flag options, see help pages for `run` and `exec` subcommands:
 
@@ -207,6 +227,19 @@ def shared_run(conf, image, container_cmd, **site_opts):
     sock_name = f"/tmp/uid-{os.getuid()}-pid-{os.getppid()}"
 
     # construct run and exec commands from user options
+    # We need to filter out any run args in the run_args
+    cmd = [conf.podman_bin, "run", "--help"]
+    valid_params = cpt.filterValidOptions(list(run_args), cmd)
+    # Find the first occurence not in the valid list
+    idx = 0
+    for idx, item in enumerate(run_args):
+        if item in valid_params:
+            continue
+        break
+    image = run_args[idx]
+    container_cmd = run_args[idx+1:]
+    # TODO: maybe do some validation on the iamge and container_cmd
+
     options = sys.argv[
         sys.argv.index("shared-run") + 1: sys.argv.index(image)
     ]
@@ -223,39 +256,40 @@ def shared_run(conf, image, container_cmd, **site_opts):
         conf.podman_bin,
         "exec",
     ]
+    exec_cmd.extend(conf.get_cmd_extensions("exec", site_opts))
     exec_cmd.extend(conf.shared_run_exec_args)
     exec_cmd.extend(
         cpt.filterValidOptions(options, [conf.podman_bin, "exec", "--help"])
     )
     exec_cmd.extend([container_name] + list(container_cmd))
-
     # click.echo(f"run_cmd is: {run_cmd}")
     # click.echo(f"exec_cmd is: {exec_cmd}")
 
-    # Start monitor thread
-    if (localid is None or int(localid) == 0) and os.fork():
-        monitor(sock_name, ntasks, container_name, conf)
+    # Start monitor and run threads
+    monitor_thread = None
+    run_thread = None
+    if (localid is None or int(localid) == 0):
+        monitor_thread = Process(target=monitor, args=(sock_name, ntasks,
+                                                       container_name, conf))
+        monitor_thread.start()
+        run_thread = Process(target=shared_run_exec, args=(run_cmd, conf.env))
+        run_thread.start()
 
-    # start container with `podman run ...`
-    if (localid is None or int(localid) == 0) and os.fork():
-        devnull = os.open('/dev/null', os.O_WRONLY)
-        os.dup2(devnull, 1)
-        os.execve(run_cmd[0], run_cmd, conf.env)
     # wait for container to exist
-    comm = f"{conf.podman_bin} --log-level fatal container exists {container_name}"
-    while waitstatus_to_exitcode(os.system(comm)):
+    comm = ["container", "exists", container_name]
+    while podman_devnull(comm, conf) != 0:
         time.sleep(0.2)
-    # wait for container to be "running"
-    os.system(
-        f"{conf.podman_bin} wait --log-level fatal --condition running {container_name} >/dev/null 2>&1"
-    )
-    # launch cmd in container with `podman exec ...`
-    pid = os.fork()
-    if pid == 0:
-        os.execve(exec_cmd[0], exec_cmd, conf.env)
-    else:
-        os.waitpid(pid, 0)
-        send_complete(sock_name, localid)
+    comm = ["wait", "--condition", "running", container_name]
+    podman_devnull(comm, conf)
+    proc = Popen(exec_cmd, env=conf.env)
+    proc.communicate()
+    send_complete(sock_name, localid)
+    # Close out threads
+    if monitor_thread:
+        monitor_thread.join()
+    if run_thread:
+        run_thread.join()
+    sys.exit(proc.returncode)
 
 
 # podman-hpc call_podman subcommand (default, hidden, passthrough) #########
@@ -278,7 +312,6 @@ def call_podman(ctx, siteconf, help, podman_args, **site_opts):
     # if the help flag is called, we pass podman's STDOUT stream through a pipe
     # to a stream editor, to inject additional help page info
     if help:
-        cmd.insert(2, "--help")
         app_name = ctx.find_root().command_path
         passthrough_name = os.path.basename(cmd[0])
 
@@ -292,27 +325,25 @@ def call_podman(ctx, siteconf, help, podman_args, **site_opts):
                 )
             )
 
-        cmd_sed = [
-            "/usr/bin/sed",
-            "-e",
-            f"s/{passthrough_name}/{app_name}/",
-            "-e",
-            f"s/Options:/{app_options}{passthrough_name.capitalize()} &/",
-        ]
+        cmd = [siteconf.podman_bin, ctx.info_name, "--help"]
+        proc = Popen(cmd, env=siteconf.env, stdout=PIPE)
+        out, _ = proc.communicate()
+        option_line = f"{app_options}{passthrough_name.capitalize()}"
+        option_line += " options follow:"
+        newout = ""
+        for line in out.decode().split("\n"):
+            newline = line.replace(passthrough_name, app_name)
+            newline = newline.replace("Options:", option_line)
+            newout += f"{newline}\n"
 
-        STDIN = 0
-        STDOUT = 1
-        p_read, p_write = os.pipe()
-        if os.fork():
-            os.close(p_write)
-            os.dup2(p_read, STDIN)
-            os.execv(cmd_sed[0], cmd_sed)
-            os._exit(os.EX_OSERR)
-        else:
-            os.close(p_read)
-            os.dup2(p_write, STDOUT)
+        sys.stdout.write(newout)
+    else:
+        os.execve(cmd[0], cmd, siteconf.env)
 
-    os.execve(cmd[0], cmd, siteconf.env)
+
+def shared_run_exec(run_cmd, env):
+    proc = Popen(run_cmd, stdout=PIPE, stderr=PIPE, env=env)
+    proc.communicate()
 
 
 def monitor(sockfile, ntasks, container_name, conf):
@@ -332,21 +363,18 @@ def monitor(sockfile, ntasks, container_name, conf):
     conn.close()
     os.remove(sockfile)
     # cleanup
-    log = "--log-level fatal"
-    os.system(
-            f"{conf.podman_bin} {log} kill {container_name} > /dev/null 2>&1"
-        )
-    os.system(
-            f"{conf.podman_bin} {log} rm {container_name} > /dev/null 2>&1"
-        )
-    sys.exit()
+    podman_devnull(["kill", container_name], conf)
+    podman_devnull(["rm", container_name], conf)
 
 
 def send_complete(sockfile, lid):
-    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    s.connect(sockfile)
-    s.send(bytes(lid, 'utf-8'))
-    s.close()
+    try:
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.connect(sockfile)
+        s.send(bytes(lid, 'utf-8'))
+        s.close()
+    except Exception:
+        sys.stderr.write(f"send_complete failed for {lid}\n")
 
 
 def main():
