@@ -31,7 +31,7 @@ class SiteConfig:
                      "default_args", "default_run_args",
                      "additional_stores", "hooks_dir",
                      "localid_var", "tasks_per_node_var", "ntasks_pattern",
-                     "config_home", "mksquashfs_bin"]
+                     "config_home"]
     _valid_templates = ["shared_run_args_template",
                         "graph_root_template",
                         "run_root_template",
@@ -61,8 +61,6 @@ class SiteConfig:
     localid_var = "SLURM_LOCALID"
     tasks_per_node_var = "SLURM_STEP_TASKS_PER_NDOE"
     ntasks_pattern = r'[0-9]+'
-    mksquashfs_bin = "mksquashfs.static"
-    source = dict()
 
     def __init__(self, squash_dir=None, log_level=None):
 
@@ -79,8 +77,6 @@ class SiteConfig:
         except OSError:
             self.runtime = self.trywhich("runc")
         # self.options = []
-        if squash_dir:
-            self.squash_dir = squash_dir
         self.conf_file_data = {}
         self._read_config_file()
         for param in self._valid_templates:
@@ -90,23 +86,21 @@ class SiteConfig:
 
         self.read_site_modules()
         # TODO: Allow this to be over-rideable
-        if len(self.default_args) == 0:
-            self.default_args = [
-                    "--root", self.graph_root,
-                    "--runroot", self.run_root,
-                    "--storage-opt",
-                    f"additionalimagestore={self.additionalimagestore()}",
-                    "--storage-opt",
-                    f"mount_program={self.mount_program}",
-                    "--cgroup-manager", "cgroupfs",
-                    ]
-        if len(self.default_run_args) == 0:
-            self.default_run_args = [
-                    "--hooks-dir", self.hooks_dir,
-                    "-e", f"{_MOD_ENV}={self.modules_dir}",
-                    "--annotation", f"{_HOOKS_ANNO}=true",
-                    "--security-opt", "seccomp=unconfined",
-                    ]
+        self.default_args = [
+                "--root", self.graph_root,
+                "--runroot", self.run_root,
+                "--storage-opt",
+                f"additionalimagestore={self.additionalimagestore()}",
+                "--storage-opt",
+                f"mount_program={self.mount_program}",
+                "--cgroup-manager", "cgroupfs",
+                ]
+        self.default_run_args = [
+                "--hooks-dir", self.hooks_dir,
+                "-e", f"{_MOD_ENV}={self.modules_dir}",
+                "--annotation", f"{_HOOKS_ANNO}=true",
+                "--security-opt", "seccomp=unconfined",
+                ]
         self.log_level = log_level
 
     def dump_config(self):
@@ -114,18 +108,10 @@ class SiteConfig:
         Debug method to dump the configuration
         """
 
-        for param in self._valid_params + ["active_modules"]:
-            val = getattr(self, param)
-            source = ""
-            if param in self.source:
-                source = f" ({self.source[param]})"
-            # source = self.source.get(param, "unknown")
-            if isinstance(val, list):
-                print(f"{param} {source}: (list)")
-                for item in val:
-                    print(f" - {item}")
-            else:
-                print(f"{param}{source}: {val}")
+        for param in self._valid_params:
+            val = str(getattr(self, param))
+            print(f"{param}: {val}")
+        print(f"active_modules: {self.active_modules}")
 
     @staticmethod
     def trywhich(cmd, *args, **kwargs):
@@ -143,7 +129,6 @@ class SiteConfig:
         """
         Helper function to apply the right precedence
         """
-        source = "default"
         if not parname:
             parname = attr
         if not envname:
@@ -154,27 +139,17 @@ class SiteConfig:
         if envname in os.environ:
             setval = True
             newval = os.environ[envname]
-            source = f"env: {envname}"
         elif parname in self.conf_file_data:
             setval = True
             newval = self.conf_file_data[parname]
-            source = f"file: {parname}"
         if setval and attr.endswith("_template"):
             setattr(self, attr, newval)
             newval = self._apply_template(newval)
             attr = attr.replace("_template", "")
 
+        # TODO: add type validation (e.g. str or list)
         if setval:
-            # Expand to a list if the type should be a list
-            # Assumes a common seperated string
-            if isinstance(getattr(self, attr), list) and \
-               isinstance(newval, str):
-                newval = newval.split(',')
             setattr(self, attr, newval)
-            self.source[attr] = source
-        else:
-            if attr not in self.source:
-                self.source[attr] = source
 
     def _apply_template(self, templ):
         """
@@ -314,8 +289,7 @@ class SiteConfig:
 
         subcomand: run, images, etc
         """
-        cmds = []
-        cmds.extend(self.default_args)
+        cmds = self.default_args
         if subcommand == "run":
             cmds.extend(self.default_run_args)
         for mod, mconf in self.sitemods.get(subcommand, {}).items():

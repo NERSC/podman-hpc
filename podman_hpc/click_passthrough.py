@@ -1,3 +1,4 @@
+import sys
 import os
 import re
 import click
@@ -29,8 +30,7 @@ class DefaultCommandGroup(click.Group):
             self.default_command_fn = cmd
         else:
             warnings.warn(
-                f"{self.name}.default_command_fn is already set: " +
-                f"{self.default_command_fn}",
+                f"{self.name}.default_command_fn is already set: {self.default_command_fn}",
                 UserWarning,
                 stacklevel=2,
             )
