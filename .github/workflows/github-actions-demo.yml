@@ -16,3 +16,8 @@ jobs:
         run: |
           ls ${{ github.workspace }}
       - run: echo "🍏 This job's status is ${{ job.status }}."
+      - run: echo "New stuff!"
+      - name: Test Custom Hello World Action
+        uses: ../actions/hello-world-docker-action
+        with:
+          who-to-greet: "Charlie Brown"
