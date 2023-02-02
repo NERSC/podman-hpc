@@ -1,11 +1,11 @@
 name: Build RPM Release
-run-name: ${{ github.actor }} is packaging an RPM release.
+run-name: ${{ github.actor }} is packaging an ${{ github.repository }} release.
 on: [push]
 
 jobs:
-    Build-RPM-Release:
-        name: Build RPM Release
-        runs-on: ubuntu-22.04
+    publish-release:
+        name: Publish Release
+        runs-on: ubuntu-latest
         steps:
 
         - name: Checkout code
@@ -26,19 +26,34 @@ jobs:
               draft: false
               prerelease: false
 
-        - name: build RPM package
-          id: rpm_build
-          uses: nersc/rpmbuild@master
+        - name: Build Python Package
+          id: build_py
+          uses: ./.github/actions/build-python
+
+        - name: Build RPM Package
+          id: build_rpm
+          uses: ./.github/actions/build-rpm
           with:
               spec_file: "podman-hpc.spec"
 
-        - name: Upload Release Asset
-          id: upload-release-asset
+        - name: Upload Python Asset to Release
+          id: upload_python
           uses: actions/upload-release-asset@v1
           env:
               GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           with:
-              upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps
-              asset_path: ${{ steps.rpm_build.outputs.source_rpm_path }}
-              asset_name: ${{ steps.rpm_build.outputs.source_rpm_name }}
-              asset_content_type: ${{ steps.rpm_build.outputs.rpm_content_type }}
+              upload_url: ${{ steps.create_release.outputs.upload_url }}
+              asset_path: ${{ steps.build_py.outputs.wheel_path }}
+              asset_name: ${{ steps.build_py.outputs.wheel_name }}
+              asset_content_type: ${{ steps.build_py.outputs.py_content_type }}
+
+        - name: Upload RPM Asset to Release
+          id: upload_rpm
+          uses: actions/upload-release-asset@v1
+          env:
+              GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          with:
+              upload_url: ${{ steps.create_release.outputs.upload_url }}
+              asset_path: ${{ steps.build_rpm.outputs.source_rpm_path }}
+              asset_name: ${{ steps.build_rpm.outputs.source_rpm_name }}
+              asset_content_type: ${{ steps.build_rpm.outputs.rpm_content_type }}
