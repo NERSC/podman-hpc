@@ -2,6 +2,7 @@ name: mpich
 cli_arg: mpi
 help: Enable Cray MPICH Support
 env: ENABLE_MPICH_SS
+shared_run: True
 additional_args:
   - -e SLURM_*
   - -e PALS_*

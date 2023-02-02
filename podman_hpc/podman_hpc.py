@@ -107,9 +107,6 @@ def podhpc(ctx, additional_stores, squash_dir, update_conf, log_level):
         sys.exit(1)
 
     conf.read_site_modules()
-    # migrate was here, is that important?
-    conf.config_storage(additional_stores)
-    conf.config_containers()
     conf.config_env(hpc=True)
 
     # add appropriate flags to call_podman based on invoked subcommand
@@ -128,6 +125,15 @@ def podhpc(ctx, additional_stores, squash_dir, update_conf, log_level):
     # save the site config to a context object so it can be passed to
     # subcommands
     ctx.obj = conf
+
+
+# podman-hpc infohpc subcommand ############################################
+@podhpc.command(options_metavar="[options]")
+@pass_siteconf
+def infohpc(siteconf):
+    """Dump configuration information for podman_hpc."""
+    siteconf.dump_config()
+    sys.exit()
 
 
 # podman-hpc migrate subcommand ############################################
@@ -210,6 +216,14 @@ def shared_run(conf, run_args, **site_opts):
       podman-hpc exec --help
     """
     # click.echo(f"Launching a shared-run with args: {sys.argv}")
+    _shared_run(conf, run_args, **site_opts)
+
+def _shared_run(conf, run_args, **site_opts):
+    """
+    Internal function for the shared_run.  This is so we can
+    also call it when the user does run but enabled a module
+    that has shared_run set to True. 
+    """
 
     localid = os.environ.get(conf.localid_var)
     ntasks_raw = os.environ.get(conf.tasks_per_node_var, "1")
@@ -329,7 +343,13 @@ def call_podman(ctx, siteconf, help, podman_args, **site_opts):
 
         sys.stdout.write(newout)
     else:
-        os.execve(cmd[0], cmd, siteconf.env)
+        if siteconf.shared_run:
+            for idx, arg in enumerate(sys.argv):
+                if arg == "run":
+                    sys.argv[idx] = "shared-run"
+            _shared_run(siteconf, podman_args, **site_opts)
+        else:
+            os.execve(cmd[0], cmd, siteconf.env)
 
 
 def shared_run_exec(run_cmd, env):

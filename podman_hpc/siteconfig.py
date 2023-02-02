@@ -62,6 +62,8 @@ class SiteConfig:
     tasks_per_node_var = "SLURM_STEP_TASKS_PER_NODE"
     ntasks_pattern = r'[0-9]+'
     mksquashfs_bin = "mksquashfs.static"
+    shared_run = False
+    source = dict()
 
     def __init__(self, squash_dir=None, log_level=None):
 
@@ -113,10 +115,18 @@ class SiteConfig:
         Debug method to dump the configuration
         """
 
-        for param in self._valid_params:
-            val = str(getattr(self, param))
-            print(f"{param}: {val}")
-        print(f"active_modules: {self.active_modules}")
+        for param in self._valid_params + ["active_modules"]:
+            val = getattr(self, param)
+            source = ""
+            if param in self.source:
+                source = f" ({self.source[param]})"
+            # source = self.source.get(param, "unknown")
+            if isinstance(val, list):
+                print(f"{param} {source}: (list)")
+                for item in val:
+                    print(f" - {item}")
+            else:
+                print(f"{param}{source}: {val}")
 
     @staticmethod
     def trywhich(cmd, *args, **kwargs):
@@ -134,6 +144,7 @@ class SiteConfig:
         """
         Helper function to apply the right precedence
         """
+        source = "default"
         if not parname:
             parname = attr
         if not envname:
@@ -144,9 +155,11 @@ class SiteConfig:
         if envname in os.environ:
             setval = True
             newval = os.environ[envname]
+            source = f"env: {envname}"
         elif parname in self.conf_file_data:
             setval = True
             newval = self.conf_file_data[parname]
+            source = f"file: {parname}"
         if setval and attr.endswith("_template"):
             setattr(self, attr, newval)
             newval = self._apply_template(newval)
@@ -159,6 +172,10 @@ class SiteConfig:
                isinstance(newval, str):
                 newval = newval.split(',')
             setattr(self, attr, newval)
+            self.source[attr] = source
+        else:
+            if attr not in self.source:
+                self.source[attr] = source
 
     def _apply_template(self, templ):
         """
@@ -309,6 +326,8 @@ class SiteConfig:
             if args.get(cli_arg, False):
                 cmds.extend(mconf.get("additional_args", []))
                 cmds.extend(["-e", f"{mconf['env']}=1"])
+                if mconf.get("shared_run"):
+                    self.shared_run = True
         if self.log_level:
             cmds.extend(["--log-level", self.log_level])
         return cmds
