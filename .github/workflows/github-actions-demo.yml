@@ -18,6 +18,9 @@ jobs:
       - run: echo "🍏 This job's status is ${{ job.status }}."
       - run: echo "New stuff!"
       - name: Test Custom Hello World Action
+        id: hello
         uses: ./.github/actions/hello-world-docker-action
         with:
           who-to-greet: "Charlie Brown"
+      - name: Get the output time
+        run: echo "The time of the greeting was ${{ steps.hello.outputs.time }}"
