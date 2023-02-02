@@ -50,7 +50,7 @@ jobs:
               upload_url: ${{ steps.create_release.outputs.upload_url }}
               asset_path: ${{ steps.build_py.outputs.wheel_path }}
               asset_name: ${{ steps.build_py.outputs.wheel_name }}
-              asset_content_type: ${{ steps.build_py.outputs.py_content_type }}
+              asset_content_type: text/plain
 
         - name: Upload RPM Asset to Release
           id: upload_rpm
@@ -61,4 +61,4 @@ jobs:
               upload_url: ${{ steps.create_release.outputs.upload_url }}
               asset_path: ${{ steps.build_rpm.outputs.source_rpm_path }}
               asset_name: ${{ steps.build_rpm.outputs.source_rpm_name }}
-              asset_content_type: ${{ steps.build_rpm.outputs.rpm_content_type }}
+              asset_content_type: text/plain
