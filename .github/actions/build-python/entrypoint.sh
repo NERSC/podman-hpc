@@ -1,5 +1,8 @@
 #!/bin/sh -l
 
-echo "Hello $1"
-time=$(date)
-echo "time=$time" >> $GITHUB_OUTPUT
+PACKAGE=python.package
+
+echo "Hello $1" > $PACKAGE
+
+echo wheel_path=$(pwd)/$PACKAGE >> $GITHUB_OUTPUT
+echo wheel_name=$PACKAGE >> $GITHUB_OUTPUT

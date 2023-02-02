@@ -1,6 +1,7 @@
-# Hello world docker action
+# Build Python docker action
 
-This action prints "Hello World" or "Hello" + the name of a person to greet to the log.
+This action builds a python wheel from the repo and outputs a path and name
+which can be used by future workflow steps.
 
 ## Inputs
 
@@ -10,12 +11,16 @@ This action prints "Hello World" or "Hello" + the name of a person to greet to t
 
 ## Outputs
 
-## `time`
+## `wheel_path`
 
-The time we greeted you.
+The path to the python wheel.
+
+## `wheel_name`
+
+The name of the python wheel.
 
 ## Example usage
 
-uses: actions/hello-world-docker-action@v2
+uses: ./.github/actions/build-python
 with:
   who-to-greet: 'Mona the Octocat'

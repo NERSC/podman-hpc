@@ -1,14 +1,16 @@
 # action.yml
-name: 'Hello World'
-description: 'Greet someone and record the time'
+name: 'Build Python Package'
+description: 'Build a python package from this repo.'
 inputs:
   who-to-greet:  # id of input
     description: 'Who to greet'
     required: true
     default: 'World'
 outputs:
-  time: # id of output
-    description: 'The time we greeted you'
+  wheel_path: # id of output
+    description: 'The path to the python wheel'
+  wheel_name:
+    description: 'The name of the python wheel'
 runs:
   using: 'docker'
   image: 'Dockerfile'
