@@ -1,6 +1,7 @@
-# Hello world docker action
+# Build RPM docker action
 
-This action prints "Hello World" or "Hello" + the name of a person to greet to the log.
+This action builds an RPM from the repo and outputs a path and name
+which can be used by future workflow steps.
 
 ## Inputs
 
@@ -10,12 +11,16 @@ This action prints "Hello World" or "Hello" + the name of a person to greet to t
 
 ## Outputs
 
-## `time`
+## `source_rpm_path`
 
-The time we greeted you.
+The path to the Source RPM file.
+
+## `source_rpm_name`
+
+The name of the Source RPM.
 
 ## Example usage
 
-uses: actions/hello-world-docker-action@v2
+uses: ./.github/actions/build-rpm
 with:
   who-to-greet: 'Mona the Octocat'
