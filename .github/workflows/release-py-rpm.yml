@@ -1,5 +1,5 @@
 name: Release Python Based RPM
-run-name: ${{ github.actor }} is packaging a release of ${{ github.event.repository.repo }}
+run-name: ${{ github.actor }} is packaging a release of ${{ github.event.repository.name }}
 on:
     push:
         tags:
