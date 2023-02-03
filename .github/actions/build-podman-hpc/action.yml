@@ -10,4 +10,5 @@ outputs:
     description: 'Output directory for RPM.'
 runs:
   using: 'docker'
-  image: 'Dockerfile'
+  image: 'docker.io/dpfulton/suse-python-rpmbuild:latest'
+  entrypoint: 'entrypoint.sh'
