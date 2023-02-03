@@ -1,26 +1,30 @@
-# Build Python docker action
+# Build Podman-HPC docker action
 
-This action builds a python wheel from the repo and outputs a path and name
-which can be used by future workflow steps.
+This is actually a pretty generic action that builds a python package, and then
+an RPM from the sdist, but in this case it is being used to build Podman-HPC.
+
+It exports some paths which can be used for uploading release assets in a 
+subsequent workflow step.
 
 ## Inputs
 
-## `who-to-greet`
-
-**Required** The name of the person to greet. Default `"World"`.
+No input variables.  All the magic is in the entrypoint script.
 
 ## Outputs
 
-## `wheel_path`
+## `python_dist`
 
-The path to the python wheel.
+The path to python sdist and wheel.
 
-## `wheel_name`
+## `srpm_dir`
 
-The name of the python wheel.
+Output directory for SRPM.
+
+## `rpm_dir`
+
+Output directory for RPM.
 
 ## Example usage
 
-uses: ./.github/actions/build-python
-with:
-  who-to-greet: 'Mona the Octocat'
+uses: ./.github/actions/build-podman-hpc
+
