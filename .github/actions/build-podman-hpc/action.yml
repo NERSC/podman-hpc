@@ -11,4 +11,4 @@ outputs:
 runs:
   using: 'docker'
   image: 'docker.io/dpfulton/suse-python-rpmbuild:latest'
-  entrypoint: 'entrypoint.sh'
+  entrypoint: '.github/actions/build-podman-hpc/entrypoint.sh'
