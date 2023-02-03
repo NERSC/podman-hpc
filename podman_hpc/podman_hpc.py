@@ -77,15 +77,8 @@ pass_siteconf = click.make_pass_decorator(SiteConfig, ensure=True)
     type=str,
     help="Specify alternate squash directory location",
 )
-@click.option(
-    "--update-conf",
-    is_flag=True,
-    show_default=True,
-    default=False,
-    help="Force update of storage conf",
-)
 @click.option("--log-level", type=str, default="fatal", hidden=True)
-def podhpc(ctx, additional_stores, squash_dir, update_conf, log_level):
+def podhpc(ctx, additional_stores, squash_dir, log_level):
     """Manage pods, containers and images ... on HPC!
 
     The podman-hpc utility is a wrapper script around the podman
@@ -94,8 +87,7 @@ def podhpc(ctx, additional_stores, squash_dir, update_conf, log_level):
     performance computing environment.
 
     """
-    overwrite = additional_stores or squash_dir or update_conf
-    if not (overwrite or ctx.invoked_subcommand):
+    if not ctx.invoked_subcommand:
         click.echo(ctx.get_help())
         ctx.exit()
 
@@ -107,9 +99,6 @@ def podhpc(ctx, additional_stores, squash_dir, update_conf, log_level):
         sys.exit(1)
 
     conf.read_site_modules()
-    # migrate was here, is that important?
-    conf.config_storage(additional_stores)
-    conf.config_containers()
     conf.config_env(hpc=True)
 
     # add appropriate flags to call_podman based on invoked subcommand
@@ -219,6 +208,14 @@ def shared_run(conf, run_args, **site_opts):
       podman-hpc exec --help
     """
     # click.echo(f"Launching a shared-run with args: {sys.argv}")
+    _shared_run(conf, run_args, **site_opts)
+
+def _shared_run(conf, run_args, **site_opts):
+    """
+    Internal function for the shared_run.  This is so we can
+    also call it when the user does run but enabled a module
+    that has shared_run set to True. 
+    """
 
     localid = os.environ.get(conf.localid_var)
     ntasks_raw = os.environ.get(conf.tasks_per_node_var, "1")
@@ -359,7 +356,13 @@ def call_podman(ctx, siteconf, help, podman_args, **site_opts):
 
         sys.stdout.write(newout)
     else:
-        os.execve(cmd[0], cmd, siteconf.env)
+        if siteconf.shared_run:
+            for idx, arg in enumerate(sys.argv):
+                if arg == "run":
+                    sys.argv[idx] = "shared-run"
+            _shared_run(siteconf, podman_args, **site_opts)
+        else:
+            os.execve(cmd[0], cmd, siteconf.env)
 
 
 def shared_run_exec(run_cmd, env):
@@ -378,7 +381,7 @@ def monitor(sockfile, ntasks, container_name, conf):
     s.bind(sockfile)
     ct = 0
     while True:
-        s.listen(1)
+        s.listen()
         conn, addr = s.accept()
         ct += 1
         if ct == ntasks:
@@ -396,8 +399,8 @@ def send_complete(sockfile, lid):
         s.connect(sockfile)
         s.send(bytes(lid, 'utf-8'))
         s.close()
-    except Exception:
-        sys.stderr.write(f"send_complete failed for {lid}\n")
+    except Exception as ex:
+        sys.stderr.write(f"send_complete failed for {lid}\n{ex}\n")
 
 
 def main():

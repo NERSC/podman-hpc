@@ -117,6 +117,32 @@ def test_run_fail(monkeypatch, fix_paths, mock_podman, mock_exit):
     fn = f"/tmp/uid-{os.getuid()}-pid-{os.getppid()}.txt"
 
 
+def test_shared_run_auto(monkeypatch, fix_paths, mock_podman, mock_exit):
+    sys.argv = ["podman_hpc", "run", "-it", "--rm", "--mpi",
+                "--volume", "/a:/b", "ubuntu", "uptime"]
+    monkeypatch.setenv("SLURM_LOCALID", "0")
+    monkeypatch.setenv("SLURM_STEP_TASKS_PER_NODE", "1")
+    test_dir = os.path.dirname(__file__)
+    modules_dir = os.path.join(test_dir, "..", "etc", "modules.d")
+    monkeypatch.setenv("PODMANHPC_MODULES_DIR", modules_dir)
+    phpc.main()
+    run = None
+    with open(mock_podman) as f:
+        for line in f:
+            items = line.split()
+            if items[0] == "run":
+                run = items
+            elif items[0] == "exec":
+                exec = items
+    uid = os.getuid()
+    assert run is not None
+    assert "ubuntu" in run
+    assert exec is not None
+    assert exec[-1] == "uptime"
+    assert "SLURM_*" in exec
+    assert "PALS_*" in exec
+
+
 def test_pull(monkeypatch, fix_paths, mock_podman, mock_exit,
               tmp_path, capsys):
     sys.argv = ["podman_hpc", "--squash-dir", str(tmp_path),
