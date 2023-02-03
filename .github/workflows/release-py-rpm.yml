@@ -20,17 +20,11 @@ jobs:
           id: build_py
           uses: ./.github/actions/build-python
 
-        - run: ls
-
         - name: Build RPM Package
           id: build_rpm
           uses: ./.github/actions/build-rpm
           with:
               spec_file: "podman-hpc.spec"
-
-        - run: ls
-        - run: echo ${{ steps.build_py.outputs.wheel_name }}
-        - run: echo ${{ steps.build_rpm.outputs.source_rpm_name }}
 
         - name: Release
           id: release
