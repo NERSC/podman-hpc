@@ -1,5 +1,11 @@
 # Container image that runs your code
-FROM alpine:3.10
+FROM opensuse/leap:15.4
+
+RUN zypper update -y \
+ && zypper install -y python3-pip tar \
+ && zypper clean
+
+RUN pip install --upgrade build
 
 # Copies your code file from your action repository to the filesystem path `/` of the container
 COPY entrypoint.sh /entrypoint.sh

@@ -1,11 +1,10 @@
-#!/bin/sh -l
+#/bin/sh -l
 
 # echo the entrypoint as it runs
 set -x
 
-PACKAGE=python.package
+DIST=dist
 
-echo "Hello $1" > $PACKAGE
+python3 -m build --outdir $DIST
 
-echo wheel_path=$(pwd)/$PACKAGE >> $GITHUB_OUTPUT
-echo wheel_name=$PACKAGE >> $GITHUB_OUTPUT
+echo python_dist=$DIST >> $GITHUB_OUTPUT

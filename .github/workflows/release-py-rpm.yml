@@ -34,5 +34,5 @@ jobs:
               This is a release!
               Yes it is.
             files: |
-              ${{ steps.build_py.outputs.wheel_name }}
+              ${{ steps.build_py.outputs.python_dist }}/*
               ${{ steps.build_rpm.outputs.source_rpm_name }}
