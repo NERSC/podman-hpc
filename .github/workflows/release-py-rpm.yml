@@ -24,10 +24,8 @@ jobs:
           id: release
           uses: softprops/action-gh-release@v1
           with:
-            body: |
-              This is a release!
-              Yes it is.
+            generate_release_notes: true
             files: |
               ${{ steps.build_podman_hpc.outputs.python_dist }}/*
               ${{ steps.build_podman_hpc.outputs.srpm_dir }}/*
-              ${{ steps.build_podman_hpc.outputs.rpm_dir }}/*
+              ${{ steps.build_podman_hpc.outputs.rpm_dir }}/**/*
