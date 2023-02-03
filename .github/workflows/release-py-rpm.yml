@@ -14,22 +14,7 @@ jobs:
         steps:
 
         - name: Checkout code
-          uses: actions/checkout@master
-
-        - name: Create Release
-          id: create_release
-          uses: actions/create-release@latest
-          env:
-              GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
-          with:
-              tag_name: ${{ github.ref }}
-              release_name: Release ${{ github.ref }}
-              body: |
-                Changes in this Release
-                - Create RPM
-                - Upload Source RPM
-              draft: false
-              prerelease: false
+          uses: actions/checkout@v3
 
         - name: Build Python Package
           id: build_py
@@ -41,24 +26,13 @@ jobs:
           with:
               spec_file: "podman-hpc.spec"
 
-        - name: Upload Python Asset to Release
-          id: upload_python
-          uses: actions/upload-release-asset@v1
-          env:
-              GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        - name: Release
+          id: release
+          uses: softprops/action-gh-release@v1
           with:
-              upload_url: ${{ steps.create_release.outputs.upload_url }}
-              asset_path: ${{ steps.build_py.outputs.wheel_path }}
-              asset_name: ${{ steps.build_py.outputs.wheel_name }}
-              asset_content_type: text/plain
-
-        - name: Upload RPM Asset to Release
-          id: upload_rpm
-          uses: actions/upload-release-asset@v1
-          env:
-              GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          with:
-              upload_url: ${{ steps.create_release.outputs.upload_url }}
-              asset_path: ${{ steps.build_rpm.outputs.source_rpm_path }}
-              asset_name: ${{ steps.build_rpm.outputs.source_rpm_name }}
-              asset_content_type: text/plain
+            body: |
+              This is a release!
+              Yes it is.
+            files: |
+              ${{ steps.build_py.outputs._wheel_name }}
+              ${{ steps.build_rpm.outputs.source_rpm_name }}
