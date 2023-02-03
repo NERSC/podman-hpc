@@ -1,5 +1,8 @@
 #!/bin/sh -l
 
+# echo this as it runs
+set -x
+
 SRPM=podman-hpc.srpm
 
 echo "Hello $1. I am SRPM!" > $SRPM
