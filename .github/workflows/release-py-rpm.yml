@@ -16,15 +16,9 @@ jobs:
         - name: Checkout code
           uses: actions/checkout@v3
 
-        - name: Build Python Package
-          id: build_py
-          uses: ./.github/actions/build-python
-
-        - name: Build RPM Package
-          id: build_rpm
-          uses: ./.github/actions/build-rpm
-          with:
-              spec_file: "podman-hpc.spec"
+        - name: Build Podman-HPC
+          id: build_podman_hpc
+          uses: ./.github/actions/build-podman-hpc
 
         - name: Release
           id: release
@@ -34,5 +28,6 @@ jobs:
               This is a release!
               Yes it is.
             files: |
-              ${{ steps.build_py.outputs.python_dist }}/*
-              ${{ steps.build_rpm.outputs.source_rpm_name }}
+              ${{ steps.build_podman_hpc.outputs.python_dist }}/*
+              ${{ steps.build_podman_hpc.outputs.srpm_dir }}/*
+              ${{ steps.build_podman_hpc.outputs.rpm_dir }}/*
