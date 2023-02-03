@@ -5,6 +5,9 @@ on:
         tags:
           - 'v*' # push events matching e.g. v1, v2.1, v10.0.3
 
+permissions:
+  contents: read
+
 jobs:
     publish-release:
         name: Publish Release
@@ -14,7 +17,7 @@ jobs:
         steps:
 
         - name: Checkout code
-          uses: actions/checkout@v3
+          uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c # v3.3.0
 
         - name: Build Podman-HPC
           id: build_podman_hpc
@@ -22,7 +25,7 @@ jobs:
 
         - name: Release
           id: release
-          uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844
+          uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 #v1
           with:
             generate_release_notes: true
             files: |
