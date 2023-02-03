@@ -2,7 +2,10 @@
 FROM opensuse/leap:15.4
 
 RUN zypper update -y \
- && zypper install -y python3-pip tar \
+ && zypper install -y \
+     python3-pip \
+     tar \
+     make \
  && zypper clean
 
 RUN pip install --upgrade build
