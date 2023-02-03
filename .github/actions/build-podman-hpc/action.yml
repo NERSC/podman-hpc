@@ -1,0 +1,15 @@
+# action.yml
+name: 'Build Podman-HPC'
+description: 'Build a python package from this repo.'
+outputs:
+  python_dist: # id of output
+    description: 'The path to python sdist and wheel.'
+  rpmbuild_topdir:
+    description: 'The top level directory for rpmbuild tool.'
+  srpm_dir:
+    description: 'Output directory for SRPM.  Equivalent to `{{ rpmbuild_topdir }}/SRPMS` .'
+  rpm_dir:
+    description: 'Output directory for RPM.  Equivalent to `{{ rpmbuild_topdir }}/RPMS` .'
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
