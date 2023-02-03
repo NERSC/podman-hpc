@@ -1,0 +1,14 @@
+# action.yml
+name: 'Build Podman-HPC'
+description: 'Build a python package from this repo.'
+outputs:
+  python_dist: # id of output
+    description: 'The path to python sdist and wheel.'
+  srpm_dir:
+    description: 'Output directory for SRPM.'
+  rpm_dir:
+    description: 'Output directory for RPM.'
+runs:
+  using: 'docker'
+  image: 'docker.io/dpfulton/suse-python-rpmbuild:latest'
+  entrypoint: '.github/actions/build-podman-hpc/entrypoint.sh'

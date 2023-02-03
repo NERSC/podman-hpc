@@ -1,0 +1,31 @@
+name: Release Python Based RPM
+run-name: ${{ github.triggering_actor }} is packaging a release of ${{ github.event.repository.name }}
+on:
+    push:
+        tags:
+          - 'v*' # push events matching e.g. v1, v2.1, v10.0.3
+
+jobs:
+    publish-release:
+        name: Publish Release
+        runs-on: ubuntu-latest
+        permissions:
+          contents: write
+        steps:
+
+        - name: Checkout code
+          uses: actions/checkout@v3
+
+        - name: Build Podman-HPC
+          id: build_podman_hpc
+          uses: ./.github/actions/build-podman-hpc
+
+        - name: Release
+          id: release
+          uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844
+          with:
+            generate_release_notes: true
+            files: |
+              ${{ steps.build_podman_hpc.outputs.python_dist }}/*
+              ${{ steps.build_podman_hpc.outputs.srpm_dir }}/*
+              ${{ steps.build_podman_hpc.outputs.rpm_dir }}/**/*
