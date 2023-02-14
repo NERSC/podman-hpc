@@ -17,24 +17,24 @@ copy:
   - /global/common/software/nersc/pm-2022q4/sw/nccl-2.15.5-ofi-r4/lib/*:/opt/udiImage/modules/nccl-2.15/lib/*
   - /global/common/software/nersc/pm-2022q4/sw/nccl-2.15.5-ofi-r4/include/*:/opt/udiImage/modules/nccl-2.15/include/*
 bind:    
-  - /usr/lib64/libcxi.so*:/usr/lib64/libcxi.so*
-  - /usr/lib64/libcurl.so*:usr/lib64/libcurl.so*
-  - /usr/lib64/libjson-c.so*:/usr/lib64/libjson-c.so*
-  - /opt/cray/pe/gcc/11.2.0/snos/lib64/libatomic.so*:/opt/cray/pe/gcc/11.2.0/snos/lib64/libatomic.so*
-  - /opt/cray/libfabric/1.15.2.0/lib64/libfabric.so*:/opt/cray/libfabric/1.15.2.0/lib64/libfabric.so*
-  - /opt/cray/pe/mpich/8.1.22/gtl/lib/libmpi_gtl_cuda.so*:/opt/cray/pe/mpich/8.1.22/gtl/lib/libmpi_gtl_cuda.so*
-  - /opt/cray/xpmem/default/lib64/libxpmem.so*:/opt/cray/xpmem/default/lib64/libxpmem.so*
-  - /usr/lib64/libnghttp2.so*:/usr/lib64/libnghttp2.so*
-  - /usr/lib64/libidn2.so*:/usr/lib64/libidn2.so*
-  - /usr/lib64/libpsl.so*:/usr/lib64/libpsl.so*
-  - /usr/lib64/libgssapi_krb5.so*:/usr/lib64/libgssapi_krb5.so*
-  - /usr/lib64/libldap_r-2.4.so*:/usr/lib64/libldap_r-2.4.so*
-  - /usr/lib64/liblber-2.4.so*:/usr/lib64/liblber-2.4.so*
-  - /usr/lib64/libunistring.so*:/usr/lib64/libunistring.so*
-  - /usr/lib64/libkrb5.so*:usr/lib64/libkrb5.so*
-  - /usr/lib64/libk5crypto.so*:/usr/lib64/libk5crypto.so*
-  - /usr/lib64/libcom_err.so*:/usr/lib64/libcom_err.so*
-  - /usr/lib64/libkrb5support.so*:/usr/lib64/libkrb5support.so*
-  - /lib64/libresolv.so*:/lib64/libresolv.so*
-  - /usr/lib64/libsasl2.so*:/usr/lib64/libsasl2.so*
-  - /usr/lib64/libkeyutils.so*:/usr/lib64/libkeyutils.so*
+  - /usr/lib64/libcxi.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/libcxi.so*
+  - /usr/lib64/libcurl.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/libcurl.so*
+  - /usr/lib64/libjson-c.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/libjson-c.so*
+  - /opt/cray/pe/gcc/11.2.0/snos/lib64/libatomic.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/libatomic.so*
+  - /opt/cray/libfabric/1.15.2.0/lib64/libfabric.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/libfabric.so*
+  - /opt/cray/pe/mpich/8.1.22/gtl/lib/libmpi_gtl_cuda.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/libmpi_gtl_cuda.so*
+  - /opt/cray/xpmem/default/lib64/libxpmem.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/libxpmem.so*
+  - /usr/lib64/libnghttp2.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/libnghttp2.so*
+  - /usr/lib64/libidn2.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/libidn2.so*
+  - /usr/lib64/libpsl.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/libpsl.so*
+  - /usr/lib64/libgssapi_krb5.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/libgssapi_krb5.so*
+  - /usr/lib64/libldap_r-2.4.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/libldap_r-2.4.so*
+  - /usr/lib64/liblber-2.4.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/liblber-2.4.so*
+  - /usr/lib64/libunistring.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/libunistring.so*
+  - /usr/lib64/libkrb5.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/libkrb5.so*
+  - /usr/lib64/libk5crypto.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/libk5crypto.so*
+  - /usr/lib64/libcom_err.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/libcom_err.so*
+  - /usr/lib64/libkrb5support.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/libkrb5support.so*
+  - /lib64/libresolv.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/libresolv.so*
+  - /usr/lib64/libsasl2.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/libsasl2.so*
+  - /usr/lib64/libkeyutils.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/libkeyutils.so*
