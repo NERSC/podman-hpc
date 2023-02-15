@@ -1,0 +1,6 @@
+name: cvmfs
+cli_arg: cvmfs
+help: Enable CVMFS filesystem
+env: ENABLE_CVMFS
+bind:
+  - /cvmfs:/cvmfs

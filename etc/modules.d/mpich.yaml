@@ -8,6 +8,7 @@ additional_args:
   - -e PALS_*
   - -e PMI_*
   - -e LD_LIBRARY_PATH=/opt/udiImage/modules/mpich:/opt/udiImage/modules/mpich/dep
+  - -e MPICH_GPU_SUPPORT_ENABLED   
   - --ipc=host
   - --network=host
   - --pid=host
