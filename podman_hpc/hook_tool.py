@@ -131,6 +131,8 @@ def main():
     pid = inp["pid"]
     cf = json.load(open("config.json"))
     cf_env = {}
+    # initialize with any values set in the hook env configuration
+    cf_env.update(os.environ)
     for e in cf["process"]["env"]:
         k, v = e.split("=", maxsplit=1)
         cf_env[k] = v
