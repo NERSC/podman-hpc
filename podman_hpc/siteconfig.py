@@ -54,6 +54,7 @@ class SiteConfig:
     modules_dir = "/etc/podman_hpc/modules.d"
     shared_run_exec_args = ["-e", "SLURM_*", "-e", "PALS_*", "-e", "PMI_*"]
     default_run_args = []
+    default_pull_args = []
     shared_run_command = ["sleep", "infinity"]
     podman_bin = "podman"
     mount_program = "fuse-overlayfs-warp"
@@ -107,6 +108,12 @@ class SiteConfig:
                     "-e", f"{_MOD_ENV}={self.modules_dir}",
                     "--annotation", f"{_HOOKS_ANNO}=true",
                     "--security-opt", "seccomp=unconfined",
+                    ]
+        if len(self.default_pull_args) == 0:
+            self.default_pull_args = [
+                    "--root", self.graph_root,
+                    "--runroot", self.run_root,
+                    "--cgroup-manager", "cgroupfs",
                     ]
         self.log_level = log_level
 
