@@ -25,6 +25,7 @@ BuildRequires:  python3
 Requires:       podman
 Requires:       python3-toml
 Requires:       python3-click
+Requires:       squashfuse
 Requires:       mksquashfs-static
 
 %description

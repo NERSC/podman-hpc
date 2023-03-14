@@ -78,15 +78,8 @@ pass_siteconf = click.make_pass_decorator(SiteConfig, ensure=True)
     type=str,
     help="Specify alternate squash directory location",
 )
-@click.option(
-    "--update-conf",
-    is_flag=True,
-    show_default=True,
-    default=False,
-    help="Force update of storage conf",
-)
 @click.option("--log-level", type=str, default="fatal", hidden=True)
-def podhpc(ctx, additional_stores, squash_dir, update_conf, log_level):
+def podhpc(ctx, additional_stores, squash_dir, log_level):
     """Manage pods, containers and images ... on HPC!
 
     The podman-hpc utility is a wrapper script around the podman
@@ -95,8 +88,7 @@ def podhpc(ctx, additional_stores, squash_dir, update_conf, log_level):
     performance computing environment.
 
     """
-    overwrite = additional_stores or squash_dir or update_conf
-    if not (overwrite or ctx.invoked_subcommand):
+    if not ctx.invoked_subcommand:
         click.echo(ctx.get_help())
         ctx.exit()
 
