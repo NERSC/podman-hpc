@@ -8,6 +8,7 @@ import time
 import click
 from . import click_passthrough as cpt
 from .migrate2scratch import MigrateUtils
+from .migrate2scratch import ImageStore
 from .siteconfig import SiteConfig
 from multiprocessing import Process
 from subprocess import Popen, PIPE
@@ -98,6 +99,8 @@ def podhpc(ctx, additional_stores, squash_dir, log_level):
         sys.stderr.write(f"Error: {ex}... Exiting\n")
         sys.exit(1)
 
+    if not os.path.exists(conf.squash_dir):
+        ImageStore(conf.squash_dir, read_only=False).init_storage()
     conf.read_site_modules()
     conf.config_env(hpc=True)
 
@@ -164,7 +167,7 @@ def pull(ctx, siteconf, image, podman_args):
     """Pulls an image to a local repository and makes a squashed copy."""
     cmd = [siteconf.podman_bin, "pull"]
     cmd.extend(podman_args)
-    cmd.extend(siteconf.default_args)
+    cmd.extend(siteconf.default_pull_args)
     cmd.append(image)
     proc = Popen(cmd)
     proc.communicate()

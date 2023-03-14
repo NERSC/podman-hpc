@@ -396,6 +396,7 @@ class MigrateUtils:
             "--root", self.src.base,
             "-v", f"{_mksqstatic}:{self._mksq_inside}",
             "-v", f"{self.dst.base}/overlay/l/:/sqout",
+            "--user", "0",
             "--entrypoint", self._mksq_inside,
             img_id,
             "/", f"/sqout/{ln}.squash",
