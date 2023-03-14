@@ -72,7 +72,6 @@ def do_plugin(rp, mod, modulesd):
     """
     set up to do copies and bind mounts
     handle wildcards appropriately
-    glob over everything just to be safe
     """
     log(f"Module: {mod}")
 
@@ -82,24 +81,24 @@ def do_plugin(rp, mod, modulesd):
         src = resolve_src(src, modulesd)
         if '*' in src:
             for fp in glob(src):
-                # cut off leading slash
-                tgt2 = os.path.join(rp, fp[1:])
-                if os.path.exists(tgt2):
-                    os.remove(tgt2)
-                tgt_dir = os.path.dirname(tgt2)
-                if not os.path.exists(tgt_dir):
-                    os.makedirs(tgt_dir)
-                log(f"Copying: {fp} to {tgt2}")
-                shutil.copyfile(fp, tgt2, follow_symlinks=False)
+                # fp is the full path + filename
+                # we also need just the filename, fn
+                fn = os.path.basename(fp)
+                # let's prepare the target paste path in the container
+                paste_path = os.path.join(rp, tgt[1:], fn)
+                paste_dir = os.path.dirname(paste_path)
+                if not os.path.exists(paste_dir):
+                    os.makedirs(paste_dir)
+                log(f"Copying: {fp} to {paste_path}")
+                # in copyfile src and dst are full paths
+                shutil.copyfile(fp, paste_path, follow_symlinks=False)
         else:
-            tgt2 = os.path.join(rp, tgt[1:])
-            if os.path.exists(tgt2):
-                os.remove(tgt2)
-            tgt_dir = os.path.dirname(tgt2)
-            if not os.path.exists(tgt_dir):
-                os.makedirs(tgt_dir)
-            log(f"Copying {src} to {tgt2}")
-            shutil.copyfile(src, tgt2, follow_symlinks=False)
+            paste_path = os.path.join(rp, tgt[1:])
+            paste_dir = os.path.dirname(paste_path)
+            if not os.path.exists(paste_dir):
+                os.makedirs(paste_dir)
+            log(f"Copying {src} to {paste_path}")
+            shutil.copyfile(src, paste_path, follow_symlinks=False)
 
     # handle the bind case
     for f in mod["bind"]:
@@ -107,13 +106,13 @@ def do_plugin(rp, mod, modulesd):
         src = resolve_src(src, modulesd)
         if '*' in src:
             for fp in glob(src):
-                tgt2 = os.path.join(rp, fp[1:])
-                log(f"mounting: {fp} to {tgt2}")
-                bind_mount(fp, tgt2)
+                bind_path = os.path.join(rp, fp[1:])
+                log(f"mounting: {fp} to {bind_path}")
+                bind_mount(fp, bind_path)
         else:
-            tgt2 = os.path.join(rp, tgt[1:])
-            log(f"mounting: {src} to {tgt2}")
-            bind_mount(src, tgt2)
+            bind_path = os.path.join(rp, tgt[1:])
+            log(f"mounting: {src} to {bind_path}")
+            bind_mount(src, bind_path)
 
 
 def read_confs(mdir):
