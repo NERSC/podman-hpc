@@ -1,13 +1,15 @@
-name: mpich
-cli_arg: mpi
-help: Enable Cray MPICH Support
-env: ENABLE_MPICH_SS
+name: cuda-mpi
+cli_arg: cuda-mpi
+help: Enable CUDA-aware Cray MPICH Support
+env: ENABLE_CUDA_MPICH_SS
 shared_run: True
 additional_args:
   - -e SLURM_*
   - -e PALS_*
   - -e PMI_*
   - -e LD_LIBRARY_PATH=/opt/udiImage/modules/mpich:/opt/udiImage/modules/mpich/dep
+  - -e MPICH_GPU_SUPPORT_ENABLED=1
+  - -e LD_PRELOAD=/opt/udiImage/modules/mpich/libmpi_gtl_cuda.so.0
   - --ipc=host
   - --network=host
   - --pid=host
