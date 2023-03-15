@@ -49,7 +49,7 @@ def bind_mount(src, tgt):
         os.makedirs(tgt)
     elif not os.path.exists(tgt):
         open(tgt, "w").close()
-    subprocess.check_output(["mount", "--bind", src, tgt])
+    subprocess.check_output(["mount", "--rbind", src, tgt])
 
 
 def ldconfig():
@@ -75,44 +75,48 @@ def do_plugin(rp, mod, modulesd):
     """
     log(f"Module: {mod}")
 
-    # handle the copy case
-    for f in mod["copy"]:
-        (src, tgt) = f.split(":")
-        src = resolve_src(src, modulesd)
-        if '*' in src:
-            for fp in glob(src):
-                # fp is the full path + filename
-                # we also need just the filename, fn
-                fn = os.path.basename(fp)
-                # let's prepare the target paste path in the container
-                paste_path = os.path.join(rp, tgt[1:], fn)
+    # handle case where no copy or bind items are requested
+    if mod["copy"] is not None:
+        # handle the copy case
+        for f in mod["copy"]:
+            (src, tgt) = f.split(":")
+            src = resolve_src(src, modulesd)
+            if '*' in src:
+                for fp in glob(src):
+                    # fp is the full path + filename
+                    # we also need just the filename, fn
+                    fn = os.path.basename(fp)
+                    # let's prepare the target paste path in the container
+                    paste_path = os.path.join(rp, tgt[1:], fn)
+                    paste_dir = os.path.dirname(paste_path)
+                    if not os.path.exists(paste_dir):
+                        os.makedirs(paste_dir)
+                    log(f"Copying: {fp} to {paste_path}")
+                    # in copyfile src and dst are full paths
+                    shutil.copyfile(fp, paste_path, follow_symlinks=False)
+            else:
+                paste_path = os.path.join(rp, tgt[1:])
                 paste_dir = os.path.dirname(paste_path)
                 if not os.path.exists(paste_dir):
                     os.makedirs(paste_dir)
-                log(f"Copying: {fp} to {paste_path}")
-                # in copyfile src and dst are full paths
-                shutil.copyfile(fp, paste_path, follow_symlinks=False)
-        else:
-            paste_path = os.path.join(rp, tgt[1:])
-            paste_dir = os.path.dirname(paste_path)
-            if not os.path.exists(paste_dir):
-                os.makedirs(paste_dir)
-            log(f"Copying {src} to {paste_path}")
-            shutil.copyfile(src, paste_path, follow_symlinks=False)
+                log(f"Copying {src} to {paste_path}")
+                shutil.copyfile(src, paste_path, follow_symlinks=False)
 
-    # handle the bind case
-    for f in mod["bind"]:
-        (src, tgt) = f.split(":")
-        src = resolve_src(src, modulesd)
-        if '*' in src:
-            for fp in glob(src):
-                bind_path = os.path.join(rp, fp[1:])
-                log(f"mounting: {fp} to {bind_path}")
-                bind_mount(fp, bind_path)
-        else:
-            bind_path = os.path.join(rp, tgt[1:])
-            log(f"mounting: {src} to {bind_path}")
-            bind_mount(src, bind_path)
+    if mod["bind"] is not None:
+        # handle the bind case
+        for f in mod["bind"]:
+            (src, tgt) = f.split(":")
+            src = resolve_src(src, modulesd)
+            if '*' in src:
+                for fp in glob(src):
+                    fn = os.path.basename(fp)
+                    bind_path = os.path.join(rp, tgt[1:], fn)
+                    log(f"mounting: {fp} to {bind_path}")
+                    bind_mount(fp, bind_path)
+            else:
+                bind_path = os.path.join(rp, tgt[1:])
+                log(f"mounting: {src} to {bind_path}")
+                bind_mount(src, bind_path)
 
 
 def read_confs(mdir):
