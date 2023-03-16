@@ -149,7 +149,7 @@ def do_plugin(rp, mod, modulesd):
     actions = {"copy": copy, "bind": bind_mount}
 
     for a in actions:
-        for rule in mod.get(a, []):
+        for rule in mod.get(a) or []:
             log(f"\t{rule}")
             for src, tgt in resolve_src_and_dest(rule, rp, modulesd).items():
                 os.makedirs(os.path.dirname(tgt), exist_ok=True)
