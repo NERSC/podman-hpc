@@ -52,6 +52,13 @@ def bind_mount(src, tgt):
     subprocess.check_output(["mount", "--rbind", src, tgt])
 
 
+def copy(src, tgt, symlinks=True):
+    if os.path.isdir(src):
+        shutil.copytree(src, dst, symlinks=symlinks, copy_function=shutil.copyfile, dirs_exist_ok=True)¶
+    else:
+        shutil.copyfile(src, dst, follow_symlinks=(not symlinks))
+
+
 def ldconfig():
     if not os.path.exists("/sbin/ldconfig"):
         return
