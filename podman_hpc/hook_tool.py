@@ -57,13 +57,13 @@ def copy(src, tgt, symlinks=True):
     if os.path.isdir(src):
         shutil.copytree(
             src,
-            dst,
+            tgt,
             symlinks=symlinks,
             copy_function=shutil.copyfile,
             dirs_exist_ok=True,
         )
     else:
-        shutil.copyfile(src, dst, follow_symlinks=(not symlinks))
+        shutil.copyfile(src, tgt, follow_symlinks=(not symlinks))
 
 
 def ldconfig():
