@@ -8,7 +8,8 @@ import subprocess
 import json
 import yaml
 import shutil
-from glob import glob
+import re
+from glob import glob, iglob
 
 _MOD_ENV = "PODMANHPC_MODULES_DIR"
 
