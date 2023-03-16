@@ -75,6 +75,58 @@ def resolve_src(src, modulesd=os.path.abspath("")):
     return os.path.abspath(os.path.expandvars(src))
 
 
+def resolve_sources_and_destinations(rule, root_path, modulesd=os.path.abspath("")):
+    # extract source and destination patterns from the rule
+    rs,rd = (rule+":").split(":")[:2]
+    
+    # expand vars
+    rs = os.path.expanduser(os.path.expandvars(rs))
+    rd = os.path.expanduser(os.path.expandvars(rd))
+
+    # ensure source pattern is absolute path
+    if not os.path.isabs(rs):
+            rs = os.path.join(modulesd, rs)
+    rs = os.path.abspath(os.path.expanduser(os.path.expandvars(rs)))    
+
+    # error checks
+    if not os.path.isabs(rd):
+        log(f"Error: Destination in pattern must be an absolute path.\n\tdestination: {rd}")
+        return {}
+    if '*' in rd:
+            if rs.count('*')!=1:
+                log(
+                        "Error: Using glob '*' in destination requires exactly one glob '*' in source."
+                        f"\n\tsource: {rs}\n\tdestination: {rd}"
+                        )
+                return {}
+            else:
+                # this is used to capture the glob expansion later
+                globstrip = "^{}|{}$".format(*rs.split('*'))
+    
+    # determine how to construct absolute path to destination object
+    # if no destination rule is given, use the path from source rule
+    if rd=="": 
+        dest = lambda src: os.path.join(root_path,src[1:])
+    # if the destination rule reuses the glob pattern, trailing path separator 
+    # determines if it interpreted as a directory or obj name
+    elif '*' in rd and rd[-1]==os.path.sep:
+        dest = lambda src: os.path.join(root_path,rd.replace('*',re.sub(globstrip,"",src))[1:], os.path.basename(src))
+    elif '*' in rd and rd[-1]!=os.path.sep:
+        dest = lambda src: os.path.join(root_path,rd.replace('*',re.sub(globstrip,"",src))[1:])
+    # if we glob multiple sources, interpret destination as a directory, and append shortest unique path
+    elif (1 < len(glob(rs))):
+        common_prefix = os.path.commonpath(glob(rs))
+        dest = lambda src: os.path.join(root_path,rd[1:],os.path.relpath(src,common_prefix))
+    # otherwise, trailing path separator determines whether destination is interpreted as a directory
+    elif rd[-1]==os.path.sep:
+        dest = lambda src: os.path.join(root_path,rd[1:],os.path.basename(src))
+    else:
+        dest = lambda src: os.path.join(root_path,rd[1:])
+    
+    return {src:os.path.normpath(dest(src)) for src in iglob(rs)}       
+
+
+
 def do_plugin(rp, mod, modulesd):
     """
     set up to do copies and bind mounts
