@@ -69,12 +69,6 @@ def ldconfig():
         log(f"ldconfig failed: {ret}")
 
 
-def resolve_src(src, modulesd=os.path.abspath("")):
-    if not os.path.isabs(src):
-        src = os.path.join(modulesd, src)
-    return os.path.abspath(os.path.expandvars(src))
-
-
 def resolve_sources_and_destinations(rule, root_path, modulesd=os.path.abspath("")):
     # extract source and destination patterns from the rule
     rs,rd = (rule+":").split(":")[:2]
