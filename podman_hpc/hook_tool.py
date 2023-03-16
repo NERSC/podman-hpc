@@ -126,7 +126,6 @@ def resolve_sources_and_destinations(rule, root_path, modulesd=os.path.abspath("
     return {src:os.path.normpath(dest(src)) for src in iglob(rs)}       
 
 
-
 def do_plugin(rp, mod, modulesd):
     """
     set up to do copies and bind mounts
@@ -134,48 +133,18 @@ def do_plugin(rp, mod, modulesd):
     """
     log(f"Module: {mod}")
 
-    # handle case where no copy or bind items are requested
-    if mod["copy"] is not None:
-        # handle the copy case
-        for f in mod["copy"]:
-            (src, tgt) = f.split(":")
-            src = resolve_src(src, modulesd)
-            if '*' in src:
-                for fp in glob(src):
-                    # fp is the full path + filename
-                    # we also need just the filename, fn
-                    fn = os.path.basename(fp)
-                    # let's prepare the target paste path in the container
-                    paste_path = os.path.join(rp, tgt[1:], fn)
-                    paste_dir = os.path.dirname(paste_path)
-                    if not os.path.exists(paste_dir):
-                        os.makedirs(paste_dir)
-                    log(f"Copying: {fp} to {paste_path}")
-                    # in copyfile src and dst are full paths
-                    shutil.copyfile(fp, paste_path, follow_symlinks=False)
-            else:
-                paste_path = os.path.join(rp, tgt[1:])
-                paste_dir = os.path.dirname(paste_path)
-                if not os.path.exists(paste_dir):
-                    os.makedirs(paste_dir)
-                log(f"Copying {src} to {paste_path}")
-                shutil.copyfile(src, paste_path, follow_symlinks=False)
-
-    if mod["bind"] is not None:
-        # handle the bind case
-        for f in mod["bind"]:
-            (src, tgt) = f.split(":")
-            src = resolve_src(src, modulesd)
-            if '*' in src:
-                for fp in glob(src):
-                    fn = os.path.basename(fp)
-                    bind_path = os.path.join(rp, tgt[1:], fn)
-                    log(f"mounting: {fp} to {bind_path}")
-                    bind_mount(fp, bind_path)
-            else:
-                bind_path = os.path.join(rp, tgt[1:])
-                log(f"mounting: {src} to {bind_path}")
-                bind_mount(src, bind_path)
+    actions = {
+        "copy": copy,
+        "bind": bind_mount
+    }
+    
+    for a in actions:
+        for rule in mod.get(a,[]):
+            log(f"\t{rule}")
+            for src,tgt in resolve_sources_and_destinations(rule,rp,modulesd).items():
+                os.makedirs(os.path.dirname(tgt),exist_ok=True)
+                log(f"\t\t{a}: {src} to {tgt}")
+                actions[a](src,tgt)
 
 
 def read_confs(mdir):
