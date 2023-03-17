@@ -1,0 +1,40 @@
+name: nccl
+cli_arg: nccl
+help: Enable SS11 support for NCCL
+env: ENABLE_NCCL
+additional_args:
+  - -e LD_LIBRARY_PATH=/opt/udiImage/modules/nccl-2.15/lib:/opt/udiImage/modules/nccl-2.15/deps/lib
+  - -e FI_CXI_DISABLE_HOST_REGISTER=1
+  - -e NCCL_CROSS_NIC=1
+  - -e NCCL_SOCKET_IFNAME=hsn
+  - -e CCL_NET_GDR_LEVEL=PHB
+  - -e NCCL_NET="AWS Libfabric"
+copy:
+  - ../01-nccl.conf:/etc/ld.so.conf.d/02-nccl.conf
+  - /global/common/software/nersc/pm-2022q4/sw/evp-patch/lib64/libcrypto.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/
+  - /global/common/software/nersc/pm-2022q4/sw/evp-patch/lib64/libssh.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/
+  - /global/common/software/nersc/pm-2022q4/sw/evp-patch/lib64/libssl.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/
+  - /global/common/software/nersc/pm-2022q4/sw/nccl-2.15.5-ofi-r4/lib/libnccl*:/opt/udiImage/modules/nccl-2.15/lib/
+  - /global/common/software/nersc/pm-2022q4/sw/nccl-2.15.5-ofi-r4/include/*:/opt/udiImage/modules/nccl-2.15/include/
+  - /usr/lib64/libcxi.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/
+  - /usr/lib64/libcurl.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/
+  - /usr/lib64/libjson-c.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/
+  - /opt/cray/pe/gcc/11.2.0/snos/lib64/libatomic.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/
+  - /opt/cray/libfabric/1.15.2.0/lib64/libfabric.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/
+  - /opt/cray/pe/mpich/8.1.22/gtl/lib/libmpi_gtl_cuda.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/
+  - /opt/cray/xpmem/default/lib64/libxpmem.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/
+  - /usr/lib64/libnghttp2.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/
+  - /usr/lib64/libidn2.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/
+  - /usr/lib64/libpsl.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/
+  - /usr/lib64/libgssapi_krb5.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/
+  - /usr/lib64/libldap_r-2.4.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/
+  - /usr/lib64/liblber-2.4.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/
+  - /usr/lib64/libunistring.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/
+  - /usr/lib64/libkrb5.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/
+  - /usr/lib64/libk5crypto.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/
+  - /usr/lib64/libcom_err.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/
+  - /usr/lib64/libkrb5support.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/
+  - /usr/lib64/libresolv.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/
+  - /lib64/libresolv*:/lib64/
+  - /usr/lib64/libsasl2.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/
+  - /usr/lib64/libkeyutils.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/
