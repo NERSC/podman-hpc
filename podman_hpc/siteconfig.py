@@ -100,6 +100,8 @@ class SiteConfig:
                     f"additionalimagestore={self.additionalimagestore()}",
                     "--storage-opt",
                     f"mount_program={self.mount_program}",
+                    "--storage-opt",
+                    "ignore_chown_errors=true",
                     "--cgroup-manager", "cgroupfs",
                     ]
         if len(self.default_run_args) == 0:
