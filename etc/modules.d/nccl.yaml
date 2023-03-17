@@ -38,4 +38,3 @@ copy:
   - /lib64/libresolv*:/lib64/
   - /usr/lib64/libsasl2.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/
   - /usr/lib64/libkeyutils.so*:/opt/udiImage/modules/nccl-2.15/deps/lib/
-bind:
