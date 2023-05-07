@@ -1,26 +1,47 @@
 #!/bin/bash
 
-LOG=/tmp/fow-$(id -u).log
-LOG=/dev/null
+# if DEBUG_FOW is set, log to file in /tmp
+if [ -z "${DEBUG_FOW}" ]; then
+    LOG=/dev/null
+else
+    LOG=/tmp/fuse-overlayfs-wrap-$(id -u).log
+fi
+
+# if umount fails, sleep for 1 (default) second and retry a maximum of 5 (default) times
+UMOUNT_WAIT_RETRIES=${UMOUNT_WAIT_RETRIES:-"5"}
+UMOUNT_WAIT_DELAY=${UMOUNT_WAIT_DELAY:-"1"}
+
+echo "Entering fuse-overlayfs-wrap" >> $LOG
+date >> $LOG
+echo "Args: $@" >> $LOG
+
 if [ "$1" = "wait" ] ; then
+    echo "Calling inotifywait -e delete $2/etc" >> $LOG
     inotifywait -e delete $2/etc
-    umount $3
+    echo "Calling umount -v $3" >> $LOG
+    for i in $(seq $UMOUNT_WAIT_RETRIES); do
+        umount -v $3 >> $LOG 2>&1
+"fuse-overlayfs-wrap" 50L, 1458B                                                                                  1,1           Top
+        else
+            break
+        fi
+    done
     exit
 fi
 
 F=$(echo $@|sed 's/,upperdir.*//'|sed 's/.*lowerdir=//')
-echo "In fow $F.squash" >> $LOG
+echo "Checking for existence: ${F}.squash" >> $LOG
 if [ -e "${F}.squash" ] ; then
-	echo "Mount suash $F" >> $LOG
-	/usr/bin/squashfuse $F.squash $F >> $LOG 2>&1
+    echo "Calling squashfuse $F.squash $F" >> $LOG
+    squashfuse $F.squash $F >> $LOG 2>&1
 fi
 
-#echo "Doing fuse mount" >> $LOG
-/usr/bin/fuse-overlayfs $@
+echo "Calling fuse-overlayfs $@" >> $LOG
+fuse-overlayfs $@
 
-# Start a process to watch the mount and unmount squash
-# if possible
+# Start a process to watch the mount and unmount squash if possible
 if [ -e "${F}.squash" ] ; then
-	D=$(echo $@|sed 's/.* //')
-	$0 wait $D $F  0<&- &>/dev/null &
+    D=$(echo $@|sed 's/.* //')
+    echo "Calling $0 wait $D $F" >> $LOG
+    $0 wait $D $F  0<&- &>/dev/null &
 fi

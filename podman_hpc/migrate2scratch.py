@@ -6,8 +6,8 @@ from shutil import copytree, copy, which
 from subprocess import Popen, PIPE
 import logging
 
-DEBUG = os.environ.get("DEBUG_M2SQ", False)
-
+LOGLEVEL = os.environ.get('DEBUG_M2SQ', 'WARNING').upper()
+logging.basicConfig(level=LOGLEVEL)
 
 def merge_recs(recs_list, key):
     """
@@ -229,7 +229,7 @@ class MigrateUtils:
     images = None
     podman_bin = "podman"
     mksq_bin = "mksquashfs.static"
-    mksq_options = ["-comp", "lz4"]
+    mksq_options = ["-comp", "lz4", "-quiet"]
     exclude_list = ["/sqout", "/mksq", "/proc", "/sys"]
     _mksq_inside = "/mksq"
 
@@ -417,7 +417,7 @@ class MigrateUtils:
         logging.info("Created squash image")
         return True
 
-    def migrate_image(self, image):
+    def migrate_image(self, image, dst):
         self._lazy_init()
         logging.debug(f"Migrating {image}")
         self.dst.init_storage()
@@ -496,7 +496,7 @@ def usage():
     """
     print usage info
     """
-    print("Usage: m2scr [mig|rmi|init] <image name> [<dest>]")
+    print("Usage: migrate2squash [mig|rmi|init] <image name> [<dest>]")
     print("Set SQUASH_DIR to define the default destination")
 
 
