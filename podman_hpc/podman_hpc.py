@@ -177,7 +177,7 @@ def pull(ctx, siteconf, image, podman_args):
         mu.migrate_image(image)
     else:
         sys.stderr.write("Pull failed.\n")
-
+        sys.exit(proc.returncode)
 
 # podman-hpc shared-run subcommand #########################################
 @podhpc.command(
