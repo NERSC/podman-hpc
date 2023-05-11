@@ -2,9 +2,23 @@
 
 LOG=/tmp/fow-$(id -u).log
 LOG=/dev/null
+
+UMOUNT_WAIT_RETRIES=${UMOUNT_WAIT_RETRIES:-"5"}
+UMOUNT_WAIT_DELAY=${UMOUNT_WAIT_DELAY:-"1"}
+
 if [ "$1" = "wait" ] ; then
     inotifywait -e delete $2/etc
-    umount $3
+
+    for i in $(seq $UMOUNT_WAIT_RETRIES); do
+        umount -v $3 >> $LOG 2>&1
+        if [ $? -ne 0 ]; then
+            # Sleep to let podman clean up
+            echo "Retry umount after sleep $UMOUNT_WAIT_DELAY second(s)" >> $LOG
+            sleep $UMOUNT_WAIT_DELAY
+        else
+            break
+        fi
+    done
     exit
 fi
 
