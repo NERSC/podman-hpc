@@ -169,15 +169,21 @@ def pull(ctx, siteconf, image, podman_args):
     cmd.extend(podman_args)
     cmd.extend(siteconf.default_pull_args)
     cmd.append(image)
-    proc = Popen(cmd)
-    proc.communicate()
+    proc = Popen(cmd, stdout=PIPE, stderr=PIPE, universal_newlines=True)
+    stdout_data, stderr_data = proc.communicate()
+    # write to both stdout and stderr
+    sys.stdout.write(stdout_data)
+    # somewhat surprisingly podman routes container pull output to stderr
+    sys.stderr.write(stderr_data)
+
     if proc.returncode == 0:
-        click.echo(f"INFO: Migrating image to {siteconf.squash_dir}")
+        sys.stdout.write(f"INFO: Migrating image to {siteconf.squash_dir}\n")
         mu = MigrateUtils(conf=siteconf)
         mu.migrate_image(image)
     else:
-        sys.stderr.write("Pull failed.\n")
+        sys.stderr.write("Pull failed\n")
         sys.exit(proc.returncode)
+
 
 # podman-hpc shared-run subcommand #########################################
 @podhpc.command(
