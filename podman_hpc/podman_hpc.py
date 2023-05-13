@@ -172,11 +172,12 @@ def pull(ctx, siteconf, image, podman_args):
     proc = Popen(cmd)
     proc.communicate()
     if proc.returncode == 0:
-        click.echo(f"INFO: Migrating image to {siteconf.squash_dir}")
+        sys.stdout.write(f"INFO: Migrating image to {siteconf.squash_dir}\n")
         mu = MigrateUtils(conf=siteconf)
         mu.migrate_image(image)
     else:
         sys.stderr.write("Pull failed.\n")
+        sys.exit(proc.returncode)
 
 
 # podman-hpc shared-run subcommand #########################################
