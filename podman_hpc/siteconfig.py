@@ -328,8 +328,6 @@ class SiteConfig:
         cmds.extend(self.default_args)
         if subcommand == "run":
             cmds.extend(self.default_run_args)
-        elif subcommand == "build":
-            cmds = self.default_pull_args
         for mod, mconf in self.sitemods.get(subcommand, {}).items():
             if 'cli_arg' not in mconf:
                 continue
