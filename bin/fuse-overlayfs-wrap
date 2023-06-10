@@ -22,7 +22,7 @@ if [ "$1" = "wait" ] ; then
     exit
 fi
 
-F=$(echo $@|sed 's/,upperdir.*//'|sed 's/.*lowerdir=//')
+F=$(echo $@|sed 's/,upperdir.*//'|sed 's/.*lowerdir=//'|sed 's/.*://')
 echo "In fow $F.squash" >> $LOG
 if [ -e "${F}.squash" ] ; then
 	echo "Mount suash $F" >> $LOG
