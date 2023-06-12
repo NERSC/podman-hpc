@@ -229,8 +229,8 @@ class MigrateUtils:
     images = None
     podman_bin = "podman"
     mksq_bin = "mksquashfs.static"
-    mksq_options = ["-comp", "lz4"]
-    exclude_list = ["/sqout", "/mksq", "/proc", "/sys"]
+    mksq_options = ["-comp", "lz4", "-xattrs-exclude", "security.capability"]
+    exclude_list = ["/sqout", "/mksq", "/proc", "/sys", "/dev"]
     _mksq_inside = "/mksq"
 
     def __init__(self, src=None, dst=None, conf=None):
