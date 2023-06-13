@@ -55,6 +55,7 @@ class SiteConfig:
     shared_run_exec_args = ["-e", "SLURM_*", "-e", "PALS_*", "-e", "PMI_*"]
     default_run_args = []
     default_pull_args = []
+    default_build_args = []
     shared_run_command = ["sleep", "infinity"]
     podman_bin = "podman"
     mount_program = "fuse-overlayfs-warp"
@@ -117,6 +118,16 @@ class SiteConfig:
                     "--runroot", self.run_root,
                     "--cgroup-manager", "cgroupfs",
                     ]
+        if len(self.default_build_args) == 0:
+            self.default_build_args = [
+                    "--root", self.graph_root,
+                    "--runroot", self.run_root,
+                    "--storage-opt",
+                    f"mount_program={self.mount_program}",
+                    "--storage-opt",
+                    "ignore_chown_errors=true",
+                    "--cgroup-manager", "cgroupfs",
+                    ]            
         self.log_level = log_level
 
     def dump_config(self):
@@ -328,6 +339,8 @@ class SiteConfig:
         cmds.extend(self.default_args)
         if subcommand == "run":
             cmds.extend(self.default_run_args)
+        elif subcommand == "build":
+            cmds.extend(self.default_build_args)
         for mod, mconf in self.sitemods.get(subcommand, {}).items():
             if 'cli_arg' not in mconf:
                 continue
