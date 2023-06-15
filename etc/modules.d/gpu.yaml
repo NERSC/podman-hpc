@@ -6,11 +6,11 @@ additional_args:
   - -e NVIDIA_VISIBLE_DEVICES
 copy:
   - ../01-gpu.conf:/etc/ld.so.conf.d/02-gpu.conf
+bind:
   - /usr/lib64/libnv*:/usr/lib64/
   - /usr/lib64/nvidia/libOpenCL*:/usr/lib64/
   - /usr/lib64/libcuda*:/usr/lib64/
   - /opt/cray/pe/mpich/default/gtl/lib/libmpi_gtl_cuda*:/usr/lib64/
-bind:
   - /usr/bin/nvidia-smi:/usr/bin/nvidia-smi
   - /dev/nvidiactl:/dev/nvidiactl
   - /dev/nvidia*:/dev/
