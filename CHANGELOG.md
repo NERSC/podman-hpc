@@ -13,6 +13,7 @@ This is a minor release that fixes several additional bugs.
 - Fixes issue that causes problems with keepid during image squash (#69)
 - Fixes issue that prevents images from building on compute nodes (#66)
 - podman-hpc pull now returns nonzero exit if something fails (#57)
+- Fix issue caused by squashing different images with same name and tag (#53)
 
 ## [1.0.1] - 2023-03-17
 
