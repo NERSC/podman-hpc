@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] - 2023-06-15
+
+This is a minor release that fixes several additional bugs.
+
+- Fixes issue that causes unclean exit from leftover mounts, contributed by Pat Tovo at HPE (#54)
+- Fixes issue that causes problems with keepid during image squash (#69)
+- Fixes issue that prevents images from building on compute nodes (#66)
+- podman-hpc pull now returns nonzero exit if something fails (#57)
+- Fix issue caused by squashing different images with same name and tag (#53)
+
 ## [1.0.1] - 2023-03-17
 
 This is a minor release that fixes several bugs that have been found in early testing.
