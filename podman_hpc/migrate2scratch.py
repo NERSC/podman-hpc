@@ -448,7 +448,7 @@ class MigrateUtils:
             dimg, _ = self.dst.get_img_info(fullname)
         if dimg and dimg["id"] != img_info["id"]:
             logging.info("Replace previous version")
-            self.dst.drop_tag(image, dimg["id"])
+            self.dst.drop_tag(fullname, dimg["id"])
 
         # Copy image info
         self._copy_image_info(img_id)
