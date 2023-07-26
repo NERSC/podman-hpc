@@ -8,7 +8,8 @@ import subprocess
 import json
 import yaml
 import shutil
-from glob import glob
+import re
+from glob import glob, iglob
 
 _MOD_ENV = "PODMANHPC_MODULES_DIR"
 
@@ -49,7 +50,20 @@ def bind_mount(src, tgt):
         os.makedirs(tgt)
     elif not os.path.exists(tgt):
         open(tgt, "w").close()
-    subprocess.check_output(["mount", "--bind", src, tgt])
+    subprocess.check_output(["mount", "--rbind", src, tgt])
+
+
+def copy(src, tgt, symlinks=True):
+    if os.path.isdir(src):
+        shutil.copytree(
+            src,
+            tgt,
+            symlinks=symlinks,
+            copy_function=shutil.copyfile,
+            dirs_exist_ok=True,
+        )
+    else:
+        shutil.copyfile(src, tgt, follow_symlinks=(not symlinks))
 
 
 def ldconfig():
@@ -62,58 +76,85 @@ def ldconfig():
         log(f"ldconfig failed: {ret}")
 
 
-def resolve_src(src, modulesd=os.path.abspath("")):
-    if not os.path.isabs(src):
-        src = os.path.join(modulesd, src)
-    return os.path.abspath(os.path.expandvars(src))
+def resolve_src_and_dest(rule, root_path, modulesd=os.path.abspath("")):
+    # extract source and destination patterns from the rule
+    rs, rd = (rule + ":").split(":")[:2]
+
+    # expand vars
+    rs = os.path.expanduser(os.path.expandvars(rs))
+    rd = os.path.expanduser(os.path.expandvars(rd))
+
+    # ensure source pattern is absolute path
+    if not os.path.isabs(rs):
+        rs = os.path.join(modulesd, rs)
+    rs = os.path.abspath(os.path.expanduser(os.path.expandvars(rs)))
+
+    # error checks
+    if not os.path.isabs(rd):
+        log(
+            f"Error: Destination in pattern must be an absolute path.\n\tdestination: {rd}"
+        )
+        return {}
+    if "*" in rd:
+        if rs.count("*") != 1:
+            log(
+                "Error: Using glob '*' in destination requires exactly one glob '*' in source."
+                f"\n\tsource: {rs}\n\tdestination: {rd}"
+            )
+            return {}
+        else:
+            # this is used to capture the glob expansion later
+            globstrip = "^{}|{}$".format(*rs.split("*"))
+
+    # determine how to construct absolute path to destination object
+    # if no destination rule is given, use the path from source rule
+    if rd == "":
+        dest = lambda src: os.path.join(root_path, src[1:])
+    # if the destination rule reuses the glob pattern, trailing path separator
+    # determines if it interpreted as a directory or obj name
+    elif "*" in rd and rd[-1] == os.path.sep:
+        dest = lambda src: os.path.join(
+            root_path,
+            rd.replace("*", re.sub(globstrip, "", src))[1:],
+            os.path.basename(src),
+        )
+    elif "*" in rd and rd[-1] != os.path.sep:
+        dest = lambda src: os.path.join(
+            root_path, rd.replace("*", re.sub(globstrip, "", src))[1:]
+        )
+    # if we glob multiple sources, interpret destination as a directory, and append shortest unique path
+    elif 1 < len(glob(rs)):
+        common_prefix = os.path.commonpath(glob(rs))
+        dest = lambda src: os.path.join(
+            root_path, rd[1:], os.path.relpath(src, common_prefix)
+        )
+    # otherwise, trailing path separator determines whether destination is interpreted as a directory
+    elif rd[-1] == os.path.sep:
+        dest = lambda src: os.path.join(
+            root_path, rd[1:], os.path.basename(src)
+        )
+    else:
+        dest = lambda src: os.path.join(root_path, rd[1:])
+
+    return {src: os.path.normpath(dest(src)) for src in iglob(rs)}
 
 
 def do_plugin(rp, mod, modulesd):
     """
     set up to do copies and bind mounts
     handle wildcards appropriately
-    glob over everything just to be safe
     """
     log(f"Module: {mod}")
 
-    # handle the copy case
-    for f in mod["copy"]:
-        (src, tgt) = f.split(":")
-        src = resolve_src(src, modulesd)
-        if '*' in src:
-            for fp in glob(src):
-                # cut off leading slash
-                tgt2 = os.path.join(rp, fp[1:])
-                if os.path.exists(tgt2):
-                    os.remove(tgt2)
-                tgt_dir = os.path.dirname(tgt2)
-                if not os.path.exists(tgt_dir):
-                    os.makedirs(tgt_dir)
-                log(f"Copying: {fp} to {tgt2}")
-                shutil.copyfile(fp, tgt2, follow_symlinks=False)
-        else:
-            tgt2 = os.path.join(rp, tgt[1:])
-            if os.path.exists(tgt2):
-                os.remove(tgt2)
-            tgt_dir = os.path.dirname(tgt2)
-            if not os.path.exists(tgt_dir):
-                os.makedirs(tgt_dir)
-            log(f"Copying {src} to {tgt2}")
-            shutil.copyfile(src, tgt2, follow_symlinks=False)
+    actions = {"copy": copy, "bind": bind_mount}
 
-    # handle the bind case
-    for f in mod["bind"]:
-        (src, tgt) = f.split(":")
-        src = resolve_src(src, modulesd)
-        if '*' in src:
-            for fp in glob(src):
-                tgt2 = os.path.join(rp, fp[1:])
-                log(f"mounting: {fp} to {tgt2}")
-                bind_mount(fp, tgt2)
-        else:
-            tgt2 = os.path.join(rp, tgt[1:])
-            log(f"mounting: {src} to {tgt2}")
-            bind_mount(src, tgt2)
+    for a in actions:
+        for rule in mod.get(a) or []:
+            log(f"\t{rule}")
+            for src, tgt in resolve_src_and_dest(rule, rp, modulesd).items():
+                os.makedirs(os.path.dirname(tgt), exist_ok=True)
+                log(f"\t\t{a}: {src} to {tgt}")
+                actions[a](src, tgt)
 
 
 def read_confs(mdir):
@@ -131,6 +172,8 @@ def main():
     pid = inp["pid"]
     cf = json.load(open("config.json"))
     cf_env = {}
+    # initialize with any values set in the hook env configuration
+    cf_env.update(os.environ)
     for e in cf["process"]["env"]:
         k, v = e.split("=", maxsplit=1)
         cf_env[k] = v

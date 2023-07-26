@@ -1,0 +1,8 @@
+name: cvmfs
+cli_arg: cvmfs
+help: Enable cmvfs filesystem
+env: ENABLE_CVMFS
+copy:
+  - ../01-cvmfs.conf:/etc/ld.so.conf.d/02-cvmfs.conf
+bind:
+  - /cvmfs:/cvmfs

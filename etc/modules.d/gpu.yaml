@@ -5,14 +5,14 @@ env: ENABLE_GPU
 additional_args:
   - -e NVIDIA_VISIBLE_DEVICES
 copy:
-  - ../01-gpu.conf:/etc/ld.so.conf.d/01-gpu.conf
-  - /usr/lib64/libnv*:/usr/lib64/libnv*
-  - /usr/lib64/nvidia/libOpenCL*:/usr/lib64/libOpenCL*
-  - /usr/lib64/libcuda*:/usr/lib64/libcuda*
-  - /opt/cray/pe/mpich/default/gtl/lib/libmpi_gtl_cuda*:/usr/lib64/libmpi_gtl_cuda*
+  - ../01-gpu.conf:/etc/ld.so.conf.d/02-gpu.conf
 bind:
+  - /usr/lib64/libnv*:/usr/lib64/
+  - /usr/lib64/nvidia/libOpenCL*:/usr/lib64/
+  - /usr/lib64/libcuda*:/usr/lib64/
+  - /opt/cray/pe/mpich/default/gtl/lib/libmpi_gtl_cuda*:/usr/lib64/
   - /usr/bin/nvidia-smi:/usr/bin/nvidia-smi
   - /dev/nvidiactl:/dev/nvidiactl
-  - /dev/nvidia*:/dev/nvidia*
+  - /dev/nvidia*:/dev/
   - /dev/nvidia-uvm:/dev/nvidia-uvm
   - /dev/nvidia-uvm-tools:/dev/nvidia-uvm-tools

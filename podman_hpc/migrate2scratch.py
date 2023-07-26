@@ -229,8 +229,8 @@ class MigrateUtils:
     images = None
     podman_bin = "podman"
     mksq_bin = "mksquashfs.static"
-    mksq_options = ["-comp", "lz4"]
-    exclude_list = ["/sqout", "/mksq", "/proc", "/sys"]
+    mksq_options = ["-comp", "lz4", "-xattrs-exclude", "security.capability"]
+    exclude_list = ["/sqout", "/mksq", "/proc", "/sys", "/dev"]
     _mksq_inside = "/mksq"
 
     def __init__(self, src=None, dst=None, conf=None):
@@ -396,6 +396,7 @@ class MigrateUtils:
             "--root", self.src.base,
             "-v", f"{_mksqstatic}:{self._mksq_inside}",
             "-v", f"{self.dst.base}/overlay/l/:/sqout",
+            "--user", "0",
             "--entrypoint", self._mksq_inside,
             img_id,
             "/", f"/sqout/{ln}.squash",
@@ -447,7 +448,7 @@ class MigrateUtils:
             dimg, _ = self.dst.get_img_info(fullname)
         if dimg and dimg["id"] != img_info["id"]:
             logging.info("Replace previous version")
-            self.dst.drop_tag(image, dimg["id"])
+            self.dst.drop_tag(fullname, dimg["id"])
 
         # Copy image info
         self._copy_image_info(img_id)
