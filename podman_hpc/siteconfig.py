@@ -31,7 +31,8 @@ class SiteConfig:
                      "default_args", "default_run_args",
                      "additional_stores", "hooks_dir",
                      "localid_var", "tasks_per_node_var", "ntasks_pattern",
-                     "config_home", "mksquashfs_bin"]
+                     "config_home", "mksquashfs_bin",
+                     "wait_timeout", "wait_poll_interval"]
     _valid_templates = ["shared_run_args_template",
                         "graph_root_template",
                         "run_root_template",
@@ -64,6 +65,8 @@ class SiteConfig:
     tasks_per_node_var = "SLURM_STEP_TASKS_PER_NODE"
     ntasks_pattern = r'[0-9]+'
     mksquashfs_bin = "mksquashfs.static"
+    wait_poll_interval = 0.2
+    wait_timeout = 10
     shared_run = False
     source = dict()
 
@@ -112,6 +115,11 @@ class SiteConfig:
                     "--annotation", f"{_HOOKS_ANNO}=true",
                     "--security-opt", "seccomp=unconfined",
                     ]
+        if isinstance(self.wait_poll_interval, str):
+            self.wait_poll_interval = \
+                float(self.wait_poll_interval)
+        if isinstance(self.wait_timeout, str):
+            self.wait_timeout = float(self.wait_timeout)
         if len(self.default_pull_args) == 0:
             self.default_pull_args = [
                     "--root", self.graph_root,

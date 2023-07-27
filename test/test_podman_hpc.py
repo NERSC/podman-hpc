@@ -82,11 +82,11 @@ def test_shared_run(monkeypatch, fix_paths, mock_podman, mock_exit):
     phpc.main()
     run = None
     with open(mock_podman) as f:
-        for line in f:
-            items = line.split()
+        for line in f.read().split("\n"):
+            items = line.split(" ")
             if items[0] == "run":
                 run = items
-            elif items[0] == "exec":
+            elif "exec --root" in line:
                 exec = items
     uid = os.getuid()
     assert run is not None
@@ -100,6 +100,21 @@ def test_shared_run(monkeypatch, fix_paths, mock_podman, mock_exit):
     assert "PALS_*" in exec
     assert "--volume" not in exec
     assert "--rm" not in exec
+
+
+def test_run_fail(monkeypatch, fix_paths, mock_podman, mock_exit):
+    sys.argv = ["podman_hpc", "shared-run", "-it", "--rm",
+                "-e", "FAILME=1", "ubuntu", "uptime"]
+    monkeypatch.setenv("SLURM_LOCALID", "0")
+    monkeypatch.setenv("SLURM_STEP_TASKS_PER_NODE", "1")
+    monkeypatch.setenv("PODMANHPC_WAIT_TIMEOUT", "0.5")
+    monkeypatch.setenv("MOCK_FAILURE", "1")
+    phpc.main()
+    run = None
+    out = open(mock_podman).read()
+    assert "run --rm" in out
+    assert "exec --root" not in out
+    fn = f"/tmp/uid-{os.getuid()}-pid-{os.getppid()}.txt"
 
 
 def test_shared_run_auto(monkeypatch, fix_paths, mock_podman, mock_exit):
