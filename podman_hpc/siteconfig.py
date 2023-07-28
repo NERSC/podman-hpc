@@ -95,13 +95,18 @@ class SiteConfig:
             self._check_and_set(param)
 
         self.read_site_modules()
+
+        if isinstance(self.wait_poll_interval, str):
+            self.wait_poll_interval = \
+                float(self.wait_poll_interval)
+        if isinstance(self.wait_timeout, str):
+            self.wait_timeout = float(self.wait_timeout)
+
         # TODO: Allow this to be over-rideable
         if len(self.default_args) == 0:
             self.default_args = [
                     "--root", self.graph_root,
                     "--runroot", self.run_root,
-                    "--storage-opt",
-                    f"additionalimagestore={self.additionalimagestore()}",
                     "--storage-opt",
                     f"mount_program={self.mount_program}",
                     "--storage-opt",
@@ -110,32 +115,19 @@ class SiteConfig:
                     ]
         if len(self.default_run_args) == 0:
             self.default_run_args = [
+                    "--storage-opt",
+                    f"additionalimagestore={self.additionalimagestore()}",
                     "--hooks-dir", self.hooks_dir,
-                    "-e", f"{_MOD_ENV}={self.modules_dir}",
+                    "--env", f"{_MOD_ENV}={self.modules_dir}",
                     "--annotation", f"{_HOOKS_ANNO}=true",
                     "--security-opt", "seccomp=unconfined",
                     ]
-        if isinstance(self.wait_poll_interval, str):
-            self.wait_poll_interval = \
-                float(self.wait_poll_interval)
-        if isinstance(self.wait_timeout, str):
-            self.wait_timeout = float(self.wait_timeout)
-        if len(self.default_pull_args) == 0:
-            self.default_pull_args = [
-                    "--root", self.graph_root,
-                    "--runroot", self.run_root,
-                    "--cgroup-manager", "cgroupfs",
-                    ]
         if len(self.default_build_args) == 0:
             self.default_build_args = [
-                    "--root", self.graph_root,
-                    "--runroot", self.run_root,
-                    "--storage-opt",
-                    f"mount_program={self.mount_program}",
-                    "--storage-opt",
-                    "ignore_chown_errors=true",
-                    "--cgroup-manager", "cgroupfs",
-                    ]            
+                    "--hooks-dir", self.hooks_dir,
+                    "--env", f"{_MOD_ENV}={self.modules_dir}",
+                    "--annotation", f"{_HOOKS_ANNO}=true",
+                    ]
         self.log_level = log_level
 
     def dump_config(self):
@@ -349,6 +341,10 @@ class SiteConfig:
             cmds.extend(self.default_run_args)
         elif subcommand == "build":
             cmds.extend(self.default_build_args)
+        elif subcommand == "pull":
+            cmds.extend(self.default_pull_args)
+        else:
+            pass
         for mod, mconf in self.sitemods.get(subcommand, {}).items():
             if 'cli_arg' not in mconf:
                 continue
