@@ -28,16 +28,16 @@ class SiteConfig:
     _valid_params = ["podman_bin", "mount_program", "modules_dir",
                      "shared_run_exec_args", "shared_run_command",
                      "graph_root", "run_root",
-                     "default_args", "default_run_args",
                      "additional_stores", "hooks_dir",
                      "localid_var", "tasks_per_node_var", "ntasks_pattern",
                      "config_home", "mksquashfs_bin",
-                     "wait_timeout", "wait_poll_interval"]
+                     "wait_timeout", "wait_poll_interval",
+                     "use_default_args", "use_default_run_args",
+                     "use_default_pull_args", "use_default_build_args"
+                     ]
     _valid_templates = ["shared_run_args_template",
                         "graph_root_template",
                         "run_root_template",
-                        "default_args_template",
-                        "default_run_args_template",
                         "additional_stores_template",
                         "config_home_template"
                         ]
@@ -46,7 +46,6 @@ class SiteConfig:
     config_home = f"{_xdg_base}/config"
     run_root = _xdg_base
     additional_stores = []
-    default_args = []
     hooks_dir = f"{sys.prefix}/share/containers/oci/hooks.d"
     graph_root = f"{_xdg_base}/storage"
     squash_dir = os.environ.get(
@@ -54,12 +53,13 @@ class SiteConfig:
     )
     modules_dir = "/etc/podman_hpc/modules.d"
     shared_run_exec_args = ["-e", "SLURM_*", "-e", "PALS_*", "-e", "PMI_*"]
-    default_run_args = []
-    default_pull_args = []
-    default_build_args = []
+    use_default_args = True
+    use_default_run_args = True
+    use_default_pull_args = True
+    use_default_build_args = True
     shared_run_command = ["sleep", "infinity"]
     podman_bin = "podman"
-    mount_program = "fuse-overlayfs-warp"
+    mount_program = "fuse-overlayfs-wrap"
     runtime = "runc"
     localid_var = "SLURM_LOCALID"
     tasks_per_node_var = "SLURM_STEP_TASKS_PER_NODE"
@@ -102,8 +102,7 @@ class SiteConfig:
         if isinstance(self.wait_timeout, str):
             self.wait_timeout = float(self.wait_timeout)
 
-        # TODO: Allow this to be over-rideable
-        if len(self.default_args) == 0:
+        if self.use_default_args is True:
             self.default_args = [
                     "--root", self.graph_root,
                     "--runroot", self.run_root,
@@ -113,7 +112,9 @@ class SiteConfig:
                     "ignore_chown_errors=true",
                     "--cgroup-manager", "cgroupfs",
                     ]
-        if len(self.default_run_args) == 0:
+        else:
+            self.default_args = []
+        if self.use_default_run_args is True:
             self.default_run_args = [
                     "--storage-opt",
                     f"additionalimagestore={self.additionalimagestore()}",
@@ -122,12 +123,20 @@ class SiteConfig:
                     "--annotation", f"{_HOOKS_ANNO}=true",
                     "--security-opt", "seccomp=unconfined",
                     ]
-        if len(self.default_build_args) == 0:
+        else:
+            self.default_run_args = []
+        if self.use_default_build_args is True:
             self.default_build_args = [
                     "--hooks-dir", self.hooks_dir,
                     "--env", f"{_MOD_ENV}={self.modules_dir}",
                     "--annotation", f"{_HOOKS_ANNO}=true",
                     ]
+        else:
+            self.default_build_args = []
+        
+        #currently no additional pull args, but they could be added
+        self.default_pull_args = []
+
         self.log_level = log_level
 
     def dump_config(self):
