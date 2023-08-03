@@ -32,8 +32,7 @@ class SiteConfig:
                      "localid_var", "tasks_per_node_var", "ntasks_pattern",
                      "config_home", "mksquashfs_bin",
                      "wait_timeout", "wait_poll_interval",
-                     "use_default_args", "use_default_run_args",
-                     "use_default_pull_args", "use_default_build_args"
+                     "use_default_args",
                      ]
     _valid_templates = ["shared_run_args_template",
                         "graph_root_template",
@@ -54,9 +53,6 @@ class SiteConfig:
     modules_dir = "/etc/podman_hpc/modules.d"
     shared_run_exec_args = ["-e", "SLURM_*", "-e", "PALS_*", "-e", "PMI_*"]
     use_default_args = True
-    use_default_run_args = True
-    use_default_pull_args = True
-    use_default_build_args = True
     shared_run_command = ["sleep", "infinity"]
     podman_bin = "podman"
     mount_program = "fuse-overlayfs-wrap"
@@ -108,14 +104,11 @@ class SiteConfig:
                     "--runroot", self.run_root,
                     "--storage-opt",
                     f"mount_program={self.mount_program}",
-                    "--storage-opt",
-                    "ignore_chown_errors=true",
                     "--cgroup-manager", "cgroupfs",
                     ]
-        else:
-            self.default_args = []
-        if self.use_default_run_args is True:
             self.default_run_args = [
+                    "--storage-opt",
+                    "ignore_chown_errors=true",                    
                     "--storage-opt",
                     f"additionalimagestore={self.additionalimagestore()}",
                     "--hooks-dir", self.hooks_dir,
@@ -123,20 +116,21 @@ class SiteConfig:
                     "--annotation", f"{_HOOKS_ANNO}=true",
                     "--security-opt", "seccomp=unconfined",
                     ]
-        else:
-            self.default_run_args = []
-        if self.use_default_build_args is True:
             self.default_build_args = [
                     "--hooks-dir", self.hooks_dir,
                     "--env", f"{_MOD_ENV}={self.modules_dir}",
                     "--annotation", f"{_HOOKS_ANNO}=true",
                     ]
+            self.default_pull_args = [
+                    "--storage-opt",
+                    "ignore_chown_errors=true",
+                    ]
         else:
+            self.default_args = []
+            self.default_run_args = []
             self.default_build_args = []
+            self.default_pull_args = []
         
-        #currently no additional pull args, but they could be added
-        self.default_pull_args = []
-
         self.log_level = log_level
 
     def dump_config(self):
