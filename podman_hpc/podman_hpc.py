@@ -163,11 +163,11 @@ def rmsqi(siteconf, image):
 @click.pass_context
 @click.argument("podman_args", nargs=-1, type=click.UNPROCESSED)
 @click.argument("image")
-def pull(ctx, siteconf, image, podman_args):
+def pull(ctx, siteconf, image, podman_args, **site_opts):
     """Pulls an image to a local repository and makes a squashed copy."""
     cmd = [siteconf.podman_bin, "pull"]
     cmd.extend(podman_args)
-    cmd.extend(siteconf.default_pull_args)
+    cmd.extend(siteconf.get_cmd_extensions("pull", site_opts))
     cmd.append(image)
     proc = Popen(cmd)
     proc.communicate()
@@ -178,7 +178,6 @@ def pull(ctx, siteconf, image, podman_args):
     else:
         sys.stderr.write("Pull failed.\n")
         sys.exit(proc.returncode)
-
 
 # podman-hpc shared-run subcommand #########################################
 @podhpc.command(

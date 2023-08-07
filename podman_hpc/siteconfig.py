@@ -28,16 +28,15 @@ class SiteConfig:
     _valid_params = ["podman_bin", "mount_program", "modules_dir",
                      "shared_run_exec_args", "shared_run_command",
                      "graph_root", "run_root",
-                     "default_args", "default_run_args",
                      "additional_stores", "hooks_dir",
                      "localid_var", "tasks_per_node_var", "ntasks_pattern",
                      "config_home", "mksquashfs_bin",
-                     "wait_timeout", "wait_poll_interval"]
+                     "wait_timeout", "wait_poll_interval",
+                     "use_default_args",
+                     ]
     _valid_templates = ["shared_run_args_template",
                         "graph_root_template",
                         "run_root_template",
-                        "default_args_template",
-                        "default_run_args_template",
                         "additional_stores_template",
                         "config_home_template"
                         ]
@@ -46,7 +45,6 @@ class SiteConfig:
     config_home = f"{_xdg_base}/config"
     run_root = _xdg_base
     additional_stores = []
-    default_args = []
     hooks_dir = f"{sys.prefix}/share/containers/oci/hooks.d"
     graph_root = f"{_xdg_base}/storage"
     squash_dir = os.environ.get(
@@ -54,12 +52,10 @@ class SiteConfig:
     )
     modules_dir = "/etc/podman_hpc/modules.d"
     shared_run_exec_args = ["-e", "SLURM_*", "-e", "PALS_*", "-e", "PMI_*"]
-    default_run_args = []
-    default_pull_args = []
-    default_build_args = []
+    use_default_args = True
     shared_run_command = ["sleep", "infinity"]
     podman_bin = "podman"
-    mount_program = "fuse-overlayfs-warp"
+    mount_program = "fuse-overlayfs-wrap"
     runtime = "runc"
     localid_var = "SLURM_LOCALID"
     tasks_per_node_var = "SLURM_STEP_TASKS_PER_NODE"
@@ -95,47 +91,46 @@ class SiteConfig:
             self._check_and_set(param)
 
         self.read_site_modules()
-        # TODO: Allow this to be over-rideable
-        if len(self.default_args) == 0:
-            self.default_args = [
-                    "--root", self.graph_root,
-                    "--runroot", self.run_root,
-                    "--storage-opt",
-                    f"additionalimagestore={self.additionalimagestore()}",
-                    "--storage-opt",
-                    f"mount_program={self.mount_program}",
-                    "--storage-opt",
-                    "ignore_chown_errors=true",
-                    "--cgroup-manager", "cgroupfs",
-                    ]
-        if len(self.default_run_args) == 0:
-            self.default_run_args = [
-                    "--hooks-dir", self.hooks_dir,
-                    "-e", f"{_MOD_ENV}={self.modules_dir}",
-                    "--annotation", f"{_HOOKS_ANNO}=true",
-                    "--security-opt", "seccomp=unconfined",
-                    ]
+
         if isinstance(self.wait_poll_interval, str):
             self.wait_poll_interval = \
                 float(self.wait_poll_interval)
         if isinstance(self.wait_timeout, str):
             self.wait_timeout = float(self.wait_timeout)
-        if len(self.default_pull_args) == 0:
-            self.default_pull_args = [
-                    "--root", self.graph_root,
-                    "--runroot", self.run_root,
-                    "--cgroup-manager", "cgroupfs",
-                    ]
-        if len(self.default_build_args) == 0:
-            self.default_build_args = [
+
+        if self.use_default_args is True:
+            self.default_args = [
                     "--root", self.graph_root,
                     "--runroot", self.run_root,
                     "--storage-opt",
                     f"mount_program={self.mount_program}",
+                    "--cgroup-manager", "cgroupfs",
+                    ]
+            self.default_run_args = [
+                    "--storage-opt",
+                    "ignore_chown_errors=true",                    
+                    "--storage-opt",
+                    f"additionalimagestore={self.additionalimagestore()}",
+                    "--hooks-dir", self.hooks_dir,
+                    "--env", f"{_MOD_ENV}={self.modules_dir}",
+                    "--annotation", f"{_HOOKS_ANNO}=true",
+                    "--security-opt", "seccomp=unconfined",
+                    ]
+            self.default_build_args = [
+                    "--hooks-dir", self.hooks_dir,
+                    "--env", f"{_MOD_ENV}={self.modules_dir}",
+                    "--annotation", f"{_HOOKS_ANNO}=true",
+                    ]
+            self.default_pull_args = [
                     "--storage-opt",
                     "ignore_chown_errors=true",
-                    "--cgroup-manager", "cgroupfs",
-                    ]            
+                    ]
+        else:
+            self.default_args = []
+            self.default_run_args = []
+            self.default_build_args = []
+            self.default_pull_args = []
+        
         self.log_level = log_level
 
     def dump_config(self):
@@ -349,6 +344,10 @@ class SiteConfig:
             cmds.extend(self.default_run_args)
         elif subcommand == "build":
             cmds.extend(self.default_build_args)
+        elif subcommand == "pull":
+            cmds.extend(self.default_pull_args)
+        else:
+            pass
         for mod, mconf in self.sitemods.get(subcommand, {}).items():
             if 'cli_arg' not in mconf:
                 continue
