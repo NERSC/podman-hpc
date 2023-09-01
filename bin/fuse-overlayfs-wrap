@@ -25,16 +25,24 @@ fi
 F=$(echo $@|sed 's/,upperdir.*//'|sed 's/.*lowerdir=//'|sed 's/.*://')
 echo "In fow $F.squash" >> $LOG
 if [ -e "${F}.squash" ] ; then
-	echo "Mount suash $F" >> $LOG
-	/usr/bin/squashfuse $F.squash $F >> $LOG 2>&1
+        echo "Mount squash $F" >> $LOG
+        /usr/bin/squashfuse $F.squash $F >> $LOG 2>&1
 fi
 
 #echo "Doing fuse mount" >> $LOG
-/usr/bin/fuse-overlayfs $@
+/usr/bin/fuse-overlayfs $@ >> $LOG 2>&1
+RET=$?
+D=$(echo $@|sed 's/.* //')
+chmod a+rx ${D}
+echo "$D" >> $LOG
+ls -ld $D >> $LOG
 
 # Start a process to watch the mount and unmount squash
 # if possible
 if [ -e "${F}.squash" ] ; then
-	D=$(echo $@|sed 's/.* //')
-	$0 wait $D $F  0<&- &>/dev/null &
+        D=$(echo $@|sed 's/.* //')
+        $0 wait $D $F  0<&- &>/dev/null &
 fi
+
+#sleep infinity
+exit $RET

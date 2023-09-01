@@ -25,8 +25,7 @@ The list of configurable values is:
 * shared_run_command: (list) command to run in the shared_run container (default: sleep infinity)
 * graph_root: (str) directory for the graph root (default: /tmp/{uid}_hpc/storage)
 * run_root: (str) directory for teh run root (default: /tmp/{uid}_hpc)
-* default_args: additional arguments to pass to podman (future)
-* default_run_args: additional run arguments (future)
+* use_default_args: (bool) default True. User can set to False to turn off all defaults, and must provide all settings themselves.
 * additional_stores: (list) additional storage areas
 * hooks_dir: (str) directory for hooks. Note: this should have the podman_hpc hooks tool configured.
 * config_home: (str) directory where the generated configuration files will be written and XDG_CONFIG_HOME will be set.

@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] - 2023-09-01
+
+This is a minor release that fixes several bugs.
+
+- Fixes issue using userns keep-id for squashed images (#83)
+- Fixes inconsistencies in pull, build, and run settings (#81, #80, #76). Makes it possible for users to override default settings and provide their own.
+
 ## [1.0.2] - 2023-06-15
 
 This is a minor release that fixes several additional bugs.

@@ -14,7 +14,7 @@
 
 
 Name:           podman-hpc
-Version:        1.0.2
+Version:        1.0.3
 Release:        1
 Summary:	Scripts to enable Podman to run in an HPC environment
 # FIXME: Select a correct license from https://github.com/openSUSE/spec-cleaner#spdx-licenses
