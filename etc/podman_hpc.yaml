@@ -3,8 +3,6 @@ mount_program: "/usr/bin/fuse-overlayfs-wrap"
 modules_dir: "/etc/podman_hpc/modules.d"
 shared_run_exec_args: ["-e", "SLURM_*", "-e", "PALS_*", "-e", "PMI_*"]
 shared_run_command: ["sleep", "infinity"]
-default_args: []
-default_run_args: []
 hooks_dir: "/usr/share/containers/oci/hooks.d"
 localid_var: "SLURM_LOCALID"
 tasks_per_node_var: "SLURM_STEP_TASKS_PER_NODE"
