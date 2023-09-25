@@ -313,6 +313,7 @@ def _shared_run(conf, run_args, **site_opts):
         fds = [0, 1, 2]
         if 'PMI_FD' in os.environ:
             fds.append(int(os.environ['PMI_FD']))
+            conf.env["PMI_FD"] = os.environ["PMI_FD"]
         proc = Popen(exec_cmd, env=conf.env, pass_fds=fds)
         proc.communicate()
         send_complete(sock_name, localid)
@@ -387,6 +388,8 @@ def call_podman(ctx, siteconf, help, podman_args, **site_opts):
                     sys.argv[idx] = "shared-run"
             _shared_run(siteconf, podman_args, **site_opts)
         else:
+            if 'PMI_FD' in os.environ:
+                siteconf.env["PMI_FD"] = os.environ["PMI_FD"]
             os.execve(cmd[0], cmd, siteconf.env)
 
 
