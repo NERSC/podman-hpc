@@ -125,11 +125,16 @@ class SiteConfig:
                     "--storage-opt",
                     "ignore_chown_errors=true",
                     ]
+            self.default_images_args = [
+                    "--storage-opt",
+                    f"additionalimagestore={self.additionalimagestore()}",
+                    ]
         else:
             self.default_args = []
             self.default_run_args = []
             self.default_build_args = []
             self.default_pull_args = []
+            self.default_images_args = []
         
         self.log_level = log_level
 
@@ -346,6 +351,8 @@ class SiteConfig:
             cmds.extend(self.default_build_args)
         elif subcommand == "pull":
             cmds.extend(self.default_pull_args)
+        elif subcommand == "images":
+            cmds.extend(self.default_images_args)
         else:
             pass
         for mod, mconf in self.sitemods.get(subcommand, {}).items():
