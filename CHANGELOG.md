@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.4] - 2023-10-02
+
+This is a minor release that fixes a bug.
+
+- Fixes bug where squashed images in the additionalimagestore were not displayed by the `podman-hpc images` command (#87)
+
 ## [1.0.3] - 2023-09-01
 
 This is a minor release that fixes several bugs.
