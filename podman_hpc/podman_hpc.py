@@ -151,6 +151,15 @@ def rmsqi(siteconf, image):
     mu = MigrateUtils(conf=siteconf)
     mu.remove_image(image)
 
+# podman-hpc images subcommand #############################################
+@pass_siteconf
+@click.pass_context
+@click.argument("podman_args", nargs=-1, type=click.UNPROCESSED)
+def images(ctx, siteconf, image, podman_args, **site_opts):
+    """Displays images in both local and additionalimagestore."""
+    cmd = [siteconf.podman_bin, "images"]
+    cmd.extend(podman_args)
+    cmd.extend(siteconf.get_cmd_extensions("images", site_opts))
 
 # podman-hpc pull subcommand (modified) ####################################
 @podhpc.command(
