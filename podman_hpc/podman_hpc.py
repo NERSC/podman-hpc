@@ -350,10 +350,7 @@ def call_podman(ctx, siteconf, help, podman_args, **site_opts):
         app_options = ""
         if formatter.getvalue():
             app_options = (
-                f"{app_name.capitalize()} {formatter.getvalue()}\n".replace(
-                    "\n", "\\n"
-                )
-            )
+                f"{app_name.capitalize()} {formatter.getvalue()}\n")
 
         cmd = [siteconf.podman_bin, ctx.info_name, "--help"]
         proc = Popen(cmd, env=siteconf.env, stdout=PIPE)
