@@ -24,7 +24,7 @@ The list of configurable values is:
 * shared_run_exec_args: (str) additional arguments passed to the exec command when using shared_run mode (default: None)
 * shared_run_command: (list) command to run in the shared_run container (default: sleep infinity)
 * graph_root: (str) directory for the graph root (default: /tmp/{uid}_hpc/storage)
-* run_root: (str) directory for teh run root (default: /tmp/{uid}_hpc)
+* run_root: (str) directory for the run root (default: /tmp/{uid}_hpc)
 * use_default_args: (bool) default True. User can set to False to turn off all defaults, and must provide all settings themselves.
 * additional_stores: (list) additional storage areas
 * hooks_dir: (str) directory for hooks. Note: this should have the podman_hpc hooks tool configured.
