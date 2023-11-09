@@ -27,6 +27,26 @@ def podman_devnull(cmd, conf):
     return proc.returncode
 
 
+def pmi_fd():
+    """
+    This method kicks in if PMI_FD is set.  If set,
+    this will dup that file descriptor to fd 3,
+    set PMI_FD to 3, and add a new cli arg to pass
+    the file descriptor.
+
+    Note: This is a bit of a one off and we should
+    find a cleaner solution when there is time.
+    """
+
+    if "PMI_FD" not in os.environ:
+        return []
+    pmifd = int(os.environ['PMI_FD'])
+    os.dup2(pmifd, 3)
+    os.set_inheritable(3, True)
+    os.environ['PMI_FD'] = "3"
+    return ["--preserve-fds", "1"]
+
+
 # function to specify help message formatting to mimic the podman help page.
 # follows the style of click.Command.format_help()
 # this will be inherited by subcommands created with @podhpc.command()
@@ -266,6 +286,7 @@ def _shared_run(conf, run_args, **site_opts):
         "exec",
     ]
     exec_cmd.extend(conf.get_cmd_extensions("exec", site_opts))
+    exec_cmd.extend(pmi_fd())
     exec_cmd.extend(conf.shared_run_exec_args)
     exec_cmd.extend(
         cpt.filterValidOptions(options, [conf.podman_bin, "exec", "--help"])
@@ -298,7 +319,11 @@ def _shared_run(conf, run_args, **site_opts):
                 raise OSError("Failed to start container")
         comm = ["wait", "--condition", "running", container_name]
         podman_devnull(comm, conf)
-        proc = Popen(exec_cmd, env=conf.env)
+        fds = [0, 1, 2]
+        if 'PMI_FD' in os.environ:
+            fds.append(int(os.environ['PMI_FD']))
+            conf.env["PMI_FD"] = os.environ["PMI_FD"]
+        proc = Popen(exec_cmd, env=conf.env, pass_fds=fds)
         proc.communicate()
         send_complete(sock_name, localid)
         # Close out threads
@@ -334,10 +359,8 @@ def _shared_run(conf, run_args, **site_opts):
 def call_podman(ctx, siteconf, help, podman_args, **site_opts):
     cmd = [siteconf.podman_bin, ctx.info_name]
     cmd.extend(siteconf.get_cmd_extensions(ctx.info_name, site_opts))
+    cmd.extend(pmi_fd())
     cmd.extend(podman_args)
-
-    # click.echo("will call:")
-    # click.echo(cmd)
 
     # if the help flag is called, we pass podman's STDOUT stream through a pipe
     # to a stream editor, to inject additional help page info
@@ -371,6 +394,8 @@ def call_podman(ctx, siteconf, help, podman_args, **site_opts):
                     sys.argv[idx] = "shared-run"
             _shared_run(siteconf, podman_args, **site_opts)
         else:
+            if 'PMI_FD' in os.environ:
+                siteconf.env["PMI_FD"] = os.environ["PMI_FD"]
             os.execve(cmd[0], cmd, siteconf.env)
 
 
