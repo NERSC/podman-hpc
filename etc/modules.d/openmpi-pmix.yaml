@@ -1,12 +1,15 @@
-name: openmpi
-cli_arg: openmpi
-help: Enable OpenMPI Support
-env: ENABLE_OPENMPI
-shared_run: True
+name: openmpi-pmix
+cli_arg: openmpi-pmix
+help: Enable OpenMPI/PMIx Support
+env: ENABLE_OPENMPI_PMIX
+shared_run: False
 additional_args:
+  - --userns=keep-id
   - -e SLURM_*
+  - -e SLURMD_*
   - -e PALS_*
   - -e PMI_*
+  - -e PMIX_*
   - --ipc=host
   - --network=host
   - --pid=host
