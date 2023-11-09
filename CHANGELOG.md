@@ -7,8 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.5] - 2023-11-09
 
-This is a minor release. It adds support for OpenMPI4 and older using PMI2. Future
-work will be needed to support OpenMPI5 and PMIx.
+This is a minor release. It adds initial support for OpenMPI4/PMI2 and OpenMPI5/PMIx.
 
 - Adds ability to pass through file descriptors needed for PMI2 (#95)
 
