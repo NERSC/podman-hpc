@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.5] - 2023-11-09
+
+This is a minor release. It adds support for OpenMPI4 and older using PMI2. Future
+work will be needed to support OpenMPI5 and PMIx.
+
+- Adds ability to pass through file descriptors needed for PMI2 (#95)
+
 ## [1.0.4] - 2023-10-02
 
 This is a minor release that fixes a bug.
