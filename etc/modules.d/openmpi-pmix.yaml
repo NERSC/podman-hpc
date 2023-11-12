@@ -1,0 +1,25 @@
+name: openmpi-pmix
+cli_arg: openmpi-pmix
+help: Enable OpenMPI/PMIx Support
+env: ENABLE_OPENMPI_PMIX
+shared_run: False
+additional_args:
+  - --userns=keep-id
+  - -e SLURM_*
+  - -e SLURMD_*
+  - -e PALS_*
+  - -e PMI_*
+  - -e PMIX_*
+  - --ipc=host
+  - --network=host
+  - --pid=host
+  - --privileged
+bind:
+  - /dev/xpmem:/dev/xpmem
+  - /dev/shm:/dev/shm
+  - /dev/ss0:/dev/ss0
+  - /dev/cxi*:/dev/
+  - /var/spool/slurmd:/var/spool/slurmd
+  - /run/munge:/run/munge
+  - /run/nscd:/run/nscd
+  - /etc/libibverbs.d:/etc/libibverbs.d
