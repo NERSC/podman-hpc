@@ -1,4 +1,6 @@
 from podman_hpc.migrate2scratch import MigrateUtils
+from podman_hpc.migrate2scratch import ImageStore
+from podman_hpc.siteconfig import SiteConfig
 import os
 import json
 import pytest
@@ -95,3 +97,24 @@ def test_migrate_remove(src, tmp_path, mocker):
     resp = mu.remove_image(img)
     assert resp
     assert get_count(mu.dst.images_json, img) == 0
+
+def test_readonly(src):
+    istore = ImageStore(src)
+    istore.read_only = True
+    with pytest.raises(ValueError):
+        istore.init_storage()
+
+    with pytest.raises(ValueError):
+        istore.del_rec("foo", "123")
+
+    with pytest.raises(ValueError):
+        istore.drop_tag("foo", "123")
+
+def test_conf(src):
+        class conf():
+            podman_bin = "foo"
+            mksquashfs_bin = "foo"
+            graph_root = "foo"
+            squash_dir = "foo"
+
+        mu = MigrateUtils(conf=conf())
