@@ -2,26 +2,40 @@
 import os
 import sys
 import json
-from shutil import copytree, copy, which
+import base64
+import hashlib
+from shutil import which
 from subprocess import Popen, PIPE
 import logging
+import random
+import string
 
 DEBUG = os.environ.get("DEBUG_M2SQ", False)
 
 
-def merge_recs(recs_list, key):
-    """
-    Generic method to merge a list of records
-    """
-    res = []
-    done = {}
-    for recs in recs_list:
-        for r in recs:
-            id = r[key]
-            if id not in done:
-                res.append(r)
-                done[id] = r
-    return res
+def generate_link_name(length=26):
+    characters = string.ascii_uppercase + string.digits
+    random_string = ''.join(random.choice(characters) for _ in range(length))
+    return random_string
+
+
+def encode_name(name: str, data={}):
+    if data and 'sha256' in data and 'sha256' in name:
+        if name.startswith("manifest"):
+            name = f"manifest-{data['sha256']}"
+        else:
+            name = data['sha256']
+    if ":" not in name:
+        return name
+    return "=" + base64.b64encode(name.encode()).decode()
+
+
+def shaify(data):
+    json_data = json.dumps(data["data"])
+    m = hashlib.sha256()
+    m.update(json_data.encode())
+    data["sha256"] = f"sha256:{m.hexdigest()}"
+    data["json"] = json_data
 
 
 class ImageStore:
@@ -82,15 +96,15 @@ class ImageStore:
                         return img, long_name
         return None, None
 
-    def get_manifest(self, imgid):
-        """
-        Retruns the contents of the manifest for the given image ID
+    # def get_manifest(self, imgid):
+    #     """
+    #     Retruns the contents of the manifest for the given image ID
 
-        Inputs:
-        imgid: image id
-        """
-        mf = os.path.join(self.images_dir, imgid, "manifest")
-        return json.load(open(mf))
+    #     Inputs:
+    #     imgid: image id
+    #     """
+    #     mf = os.path.join(self.images_dir, imgid, "manifest")
+    #     return json.load(open(mf))
 
     def init_storage(self):
         """
@@ -138,7 +152,7 @@ class ImageStore:
         key: key name for the ID
         """
         if self.read_only:
-            raise ValueError("Cannot init read-only stroage")
+            raise ValueError("Cannot init read-only storage")
 
         fn = os.path.join(self.base, f"overlay-{otype}", f"{otype}.json")
         data = json.load(open(fn))
@@ -164,7 +178,7 @@ class ImageStore:
         id: image ID
         """
         if self.read_only:
-            raise ValueError("Cannot init read-only stroage")
+            raise ValueError("Cannot init read-only storage")
 
         data = self.images
         for img in data:
@@ -190,7 +204,7 @@ class ImageStore:
               for duplicate IDs.
         """
         if self.read_only:
-            raise ValueError("Cannot init read-only stroage")
+            raise ValueError("Cannot init read-only storage")
 
         fn = os.path.join(self.base, f"overlay-{otype}", f"{otype}.json")
         data = json.load(open(fn))
@@ -217,6 +231,46 @@ class ImageStore:
         """
         lf = os.path.join(self.overlay_dir, img_id, "link")
         return open(lf).read()
+
+    def get_layer(self, layer_id):
+        for layer in self.layers:
+            if layer['id'] == layer_id:
+                return layer
+
+    def create_overlay(self, id):
+        over_dir = os.path.join(self.overlay_dir, id)
+        os.makedirs(over_dir, exist_ok=True)
+        for dir_name in ["empty", "work", "merged"]:
+            os.makedirs(os.path.join(over_dir, dir_name), exist_ok=True)
+        link_name = generate_link_name()
+        with open(os.path.join(over_dir, "link"), "w") as f:
+            f.write(link_name)
+        link_file = os.path.join(self.overlay_dir, "l", link_name)
+        link_tgt = os.path.join("..", id, "diff")
+        os.symlink(link_tgt, link_file)
+
+    def read_image_data(self, id, file_list):
+        image_dir = os.path.join(self.images_dir, id)
+        img_data = {}
+        for fname in file_list:
+            if not fname.startswith("manifest") and \
+               not fname.startswith("sha256"):
+                continue
+            full_name = os.path.join(image_dir, encode_name(fname))
+            with open(full_name) as f:
+                data = f.read()
+            img_data[fname] = {"orig_name": fname,
+                               "json": data,
+                               "data": json.loads(data)}
+        return img_data
+
+    def write_image_data(self, id, img_data):
+        image_dir = os.path.join(self.images_dir, id)
+        os.makedirs(image_dir, exist_ok=True)
+        for fname, data in img_data.items():
+            full_name = os.path.join(image_dir, encode_name(fname, data=data))
+            with open(full_name, "w") as f:
+                f.write(data["json"])
 
 
 class MigrateUtils:
@@ -280,103 +334,6 @@ class MigrateUtils:
                     p = val.replace(" ", "").replace('"', "")
         return p
 
-    def _get_img_layers(self, store, imgid):
-        """
-        This finds all the required layers for an image
-        including layers coming from dependent images.
-
-        Inputs:
-        imgid: Image ID
-        """
-
-        def _add_parent(layer, layers, by_id, layer_ids):
-            """
-            Recrusive function to walk up parent graph.
-
-            Inputs:
-            layer: layer to walk
-            layers: list of layers that are being accumulated.
-            by_id: dictionary of layers by ID
-            layer_ids: accumulated dictionary of layers by ID
-            """
-            if "parent" in layer and layer["parent"] not in layer_ids:
-                parent = by_id[layer["parent"]]
-                layers.append(parent)
-                layer_ids.add(parent["id"])
-                _add_parent(parent, layers, by_id, layer_ids)
-
-        by_digest = {}
-        by_id = {}
-        all_layers = merge_recs([self.src.layers, self.dst.layers], "id")
-        for layer in all_layers:
-            if "compressed-diff-digest" in layer:
-                by_digest[layer["compressed-diff-digest"]] = layer
-            if "diff-digest" in layer:
-                by_digest[layer["diff-digest"]] = layer
-            by_id[layer["id"]] = layer
-        md = store.get_manifest(imgid)
-        layers = []
-        layer_ids = set()
-        for layer in md["layers"]:
-            ld = by_digest[layer["digest"]]
-            layer_ids.add(ld["id"])
-            _add_parent(ld, layers, by_id, layer_ids)
-            layers.append(ld)
-
-        return layers
-
-    def _copy_image_info(self, img_id):
-        srcd = os.path.join(self.src.images_dir, img_id)
-        dstd = os.path.join(self.dst.images_dir, img_id)
-        # Copy image directory
-        if not os.path.exists(dstd):
-            copytree(srcd, dstd)
-
-    def _copy_required_layers(self, req_layers):
-        for layer in req_layers:
-            layer_id = layer["id"]
-            fn = f"{layer_id}.tar-split.gz"
-            srcd = os.path.join(self.src.layers_dir, fn)
-            dstd = os.path.join(self.dst.layers_dir, fn)
-            if not os.path.exists(dstd):
-                logging.debug(f"Copy {srcd} to {dstd}")
-                copy(srcd, dstd)
-        self.dst.add_recs("layers", req_layers)
-
-    def _copy_overlay(self, img_id, layers):
-        for layer in layers:
-            id = layer["id"]
-            sbpath = os.path.join(self.src.overlay_dir, id)
-            dbpath = os.path.join(self.dst.overlay_dir, id)
-            if os.path.exists(sbpath) and not os.path.exists(dbpath):
-                os.mkdir(dbpath)
-            for p in ["empty", "merged", "work", "diff"]:
-                spath = os.path.join(sbpath, p)
-                dpath = os.path.join(dbpath, p)
-                if os.path.exists(spath) and not os.path.exists(dpath):
-                    os.mkdir(dpath)
-            # the link
-            src = os.path.join(sbpath, "link")
-            dst = os.path.join(dbpath, "link")
-            if not os.path.exists(dst):
-                logging.debug(f"Copy {src} to{dst}")
-                copy(src, dst)
-
-            # Create symlink file
-            link = self.dst.read_link_file(id)
-            lname = os.path.join(self.dst.overlay_dir, "l", link)
-            tgt = os.path.join("..", id, "diff")
-            if not os.path.exists(lname):
-                os.symlink(tgt, lname)
-            # Finally the squash file
-            # Since there typically isn't a squash file, this is more
-            # for future cases
-            src = self.src.get_squash_filename(link)
-            dst = self.dst.get_squash_filename(link)
-            if os.path.exists(src) and not os.path.exists(dst):
-                logging.debug(f"Copy {src} to {dst}")
-                copy(src, dst)
-
     def _mksq(self, img_id, top_id):
         # Get the link name
         ln = self.dst.read_link_file(top_id)
@@ -432,10 +389,10 @@ class MigrateUtils:
 
         img_id = img_info["id"]
         # Get the layers from the manifest
-        rld = self._get_img_layers(self.src, img_id)
-
+        top_id = img_info["layer"]
+        layer = self.src.get_layer(top_id)
+        layer.pop("parent", None)
         # make sure the src squash file exist
-        top_id = rld[-1]["id"]
         logging.debug(f"Reading link: {top_id}")
 
         if self.dst.chk_image(img_id):
@@ -451,13 +408,30 @@ class MigrateUtils:
             self.dst.drop_tag(fullname, dimg["id"])
 
         # Copy image info
-        self._copy_image_info(img_id)
+        file_list = img_info["big-data-names"]
+        image_data = self.src.read_image_data(img_id, file_list)
+
+        # Fix Manifest
+        manifest = image_data["manifest"]["data"]
+        manifest["layers"] = []
+
+        # Fix config
+        config = image_data[manifest["config"]["digest"]]
+        for hist in config["data"]["history"]:
+            hist["empty_layer"] = True
+        config["data"]["rootfs"]["diff_ids"] = []
+        shaify(config)
+        manifest["config"]["digest"] = config['sha256']
+        shaify(image_data["manifest"])
+        # print(json.dumps(config_data, indent=2))
+
+        self.dst.write_image_data(img_id, image_data)
 
         # Copy layers
-        self._copy_required_layers(rld)
+        self.dst.add_recs("layers", [layer])
 
         # Overlay
-        self._copy_overlay(img_id, rld)
+        self.dst.create_overlay(top_id)
 
         # Generate squash
         logging.debug(f"squashing {img_id}")
@@ -479,11 +453,8 @@ class MigrateUtils:
             logging.error(f"Image {image} not found\n")
             return False
         img_id = img_info["id"]
-        # Get the layers from the manifest
-        rld = self._get_img_layers(self.dst, img_id)
+        top_id = img_info["layer"]
 
-        # make sure the src squash file exist
-        top_id = rld[-1]["id"]
         ln = self.dst.read_link_file(top_id)
         sqf = self.dst.get_squash_filename(ln)
         if os.path.exists(sqf):
@@ -520,6 +491,7 @@ if __name__ == "__main__":  # pragma: no cover
         image = sys.argv[2]
         if not dst:
             dst = sys.argv[3]
-        mu.migrate_image(image, dst)
+        mu = MigrateUtils(dst=dst)
+        mu.migrate_image(image)
     else:
         usage()
