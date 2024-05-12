@@ -47,6 +47,7 @@ The template replaces strings with `{{ variable }}` with the approriate value. T
 
 ## Prerequisites
 1. `podman` should be installed separately, per the instructions at https://podman.io/
+2. User namespaces and, ideally, subuid/gid support should be enabled for the users.  This typically requires some local customization for managing this configuration.
 
 ## Site Installation
 It is recommended that `podman-hpc` is installed site-wide in a multi-user HPC center.
