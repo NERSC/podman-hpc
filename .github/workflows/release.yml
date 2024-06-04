@@ -1,9 +1,9 @@
-name: Release Python Based RPM
+name: Release Python Based RPM and Publish to PyPI
 run-name: ${{ github.triggering_actor }} is packaging a release of ${{ github.event.repository.name }}
-on:
-    push:
-        tags:
-          - 'v*' # push events matching e.g. v1, v2.1, v10.0.3
+on: workflow_dispatch
+    # push:
+    #     tags:
+    #       - 'v*' # push events matching e.g. v1, v2.1, v10.0.3
 
 permissions:
   contents: read
@@ -14,6 +14,7 @@ jobs:
         runs-on: ubuntu-latest
         permissions:
           contents: write
+          id-token: write
         steps:
 
         - name: Checkout code
@@ -22,6 +23,12 @@ jobs:
         - name: Build Podman-HPC
           id: build_podman_hpc
           uses: ./.github/actions/build-podman-hpc
+
+        - name: Publish package PyPI
+          uses: pypa/gh-action-pypi-publish@81e9d935c883d0b210363ab89cf05f3894778450 #v1.8.14
+          with:
+            name: testpypi
+            repository-url: https://test.pypi.org/legacy/
 
         - name: Release
           id: release
