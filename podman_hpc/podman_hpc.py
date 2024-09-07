@@ -255,18 +255,9 @@ def _shared_run(conf, run_args, **site_opts):
     container_name = f"uid-{os.getuid()}-pid-{os.getppid()}"
     sock_name = f"/tmp/uid-{os.getuid()}-pid-{os.getppid()}"
 
-    # construct run and exec commands from user options
-    # We need to filter out any run args in the run_args
-    cmd = [conf.podman_bin, "run", "--help"]
-    valid_params = cpt.filterValidOptions(list(run_args), cmd)
-    # Find the first occurence not in the valid list
-    idx = 0
-    for idx, item in enumerate(run_args):
-        if item in valid_params:
-            continue
-        break
-    image = run_args[idx]
-    container_cmd = run_args[idx+1:]
+    # no filtering for container args as it can interfere with podman options
+    image = run_args[0]
+    container_cmd = run_args[1:]
     # TODO: maybe do some validation on the iamge and container_cmd
 
     options = sys.argv[
