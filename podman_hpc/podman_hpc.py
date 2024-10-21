@@ -309,6 +309,7 @@ def _shared_run(conf, run_args, **site_opts):
     try:
         # wait for container to exist
         comm = ["container", "exists", container_name]
+        time.sleep(conf.wait_poll_interval)
         start_time = time.time()
         while podman_devnull(comm, conf) != 0:
             time.sleep(conf.wait_poll_interval)
