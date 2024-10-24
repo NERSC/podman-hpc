@@ -66,7 +66,7 @@ class SiteConfig:
     shared_run = False
     source = dict()
 
-    def __init__(self, squash_dir=None, log_level=None):
+    def __init__(self, squash_dir=None, log_level=None, nsenter=False):
 
         # getlogin may fail on a compute node
         try:
@@ -81,6 +81,7 @@ class SiteConfig:
         except OSError:
             self.runtime = self.trywhich("runc")
         # self.options = []
+        self.nsenter = nsenter
         if squash_dir:
             self.squash_dir = squash_dir
         self.conf_file_data = {}
@@ -89,6 +90,12 @@ class SiteConfig:
             self._check_and_set(param)
         for param in self._valid_params:
             self._check_and_set(param)
+
+        # These are used for shared run support
+        ntasks_raw = os.environ.get(self.tasks_per_node_var, "1")
+        self.ntasks = int(re.search(self.ntasks_pattern, ntasks_raw)[0])
+        self.sock_name = f"/tmp/uid-{os.getuid()}-pid-{os.getppid()}"
+        self.container_name = f"uid-{os.getuid()}-pid-{os.getppid()}"
 
         self.read_site_modules()
 
@@ -108,7 +115,7 @@ class SiteConfig:
                     ]
             self.default_run_args = [
                     "--storage-opt",
-                    "ignore_chown_errors=true",                    
+                    "ignore_chown_errors=true",
                     "--storage-opt",
                     f"additionalimagestore={self.additionalimagestore()}",
                     "--hooks-dir", self.hooks_dir,
@@ -135,7 +142,7 @@ class SiteConfig:
             self.default_build_args = []
             self.default_pull_args = []
             self.default_images_args = []
-        
+
         self.log_level = log_level
 
     def dump_config(self):
