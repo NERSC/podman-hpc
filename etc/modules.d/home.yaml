@@ -1,0 +1,6 @@
+name: home
+cli_arg: home
+help: Mount home directory
+env: MOUNT_HOME
+bind:
+  - $HOME:$HOME
