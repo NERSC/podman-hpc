@@ -153,28 +153,24 @@ class ImageStore:
             json.dump(out, open(fn, "w"))
             logging.debug(f"Updated {fn}")
 
-    def drop_tag(self, image, id):
+    def drop_tag(self, tags):
         """
         Removes an image tag from an image by its ID.
         This leaves the repo but just drops the tag which
         is only allowed to be set for one image.
 
         Inputs:
-        image: image tag name
-        id: image ID
+        tags: list of tags
         """
         if self.read_only:
             raise ValueError("Cannot init read-only stroage")
 
         data = self.images
+ 
         for img in data:
-            if img["id"] == id:
-                nnames = []
-                for name in img["names"]:
-                    if name == image:
-                        name = ":".join(image.split(":")[:-1])
-                    nnames.append(name)
-                img["names"] = nnames
+            for tag in tags:
+                if tag in img['names']:
+                    img['names'].remove(tag)
         json.dump(data, open(self.images_json, "w"))
         self.images = data
 
@@ -446,9 +442,7 @@ class MigrateUtils:
         dimg = None
         if fullname:
             dimg, _ = self.dst.get_img_info(fullname)
-        if dimg and dimg["id"] != img_info["id"]:
-            logging.info("Replace previous version")
-            self.dst.drop_tag(fullname, dimg["id"])
+        self.dst.drop_tag(img_info["names"])
 
         # Copy image info
         self._copy_image_info(img_id)
