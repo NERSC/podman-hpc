@@ -280,7 +280,7 @@ class MigrateUtils:
                     p = val.replace(" ", "").replace('"', "")
         return p
 
-    def _get_img_layers(self, store, imgid):
+    def _get_img_layers(self, store, top_layer):
         """
         This finds all the required layers for an image
         including layers coming from dependent images.
@@ -289,40 +289,35 @@ class MigrateUtils:
         imgid: Image ID
         """
 
-        def _add_parent(layer, layers, by_id, layer_ids):
+        def _add_parent(layer, layer_map, layers=None, layer_ids=None):
             """
             Recrusive function to walk up parent graph.
 
             Inputs:
             layer: layer to walk
+            layer_map: dictionary of layers by ID
             layers: list of layers that are being accumulated.
-            by_id: dictionary of layers by ID
             layer_ids: accumulated dictionary of layers by ID
             """
+            if not layer_ids:
+                layer_ids = set()
+            if not layers:
+                layers = []
+            logging.debug(f"Adding layer {layer['id']}")
+            layers.append(layer)
+            layer_ids.add(layer["id"])
             if "parent" in layer and layer["parent"] not in layer_ids:
-                parent = by_id[layer["parent"]]
-                layers.append(parent)
-                layer_ids.add(parent["id"])
-                _add_parent(parent, layers, by_id, layer_ids)
+                parent = layer_map[layer["parent"]]
+                _add_parent(parent, layer_map, layers, layer_ids)
+            return layers
 
-        by_digest = {}
-        by_id = {}
+
+        layer_map = {}
         all_layers = merge_recs([self.src.layers, self.dst.layers], "id")
         for layer in all_layers:
-            if "compressed-diff-digest" in layer:
-                by_digest[layer["compressed-diff-digest"]] = layer
-            if "diff-digest" in layer:
-                by_digest[layer["diff-digest"]] = layer
-            by_id[layer["id"]] = layer
-        md = store.get_manifest(imgid)
-        layers = []
-        layer_ids = set()
-        for layer in md["layers"]:
-            ld = by_digest[layer["digest"]]
-            layer_ids.add(ld["id"])
-            _add_parent(ld, layers, by_id, layer_ids)
-            layers.append(ld)
-
+            layer_map[layer["id"]] = layer
+        layer = layer_map[top_layer]
+        layers = _add_parent(layer, layer_map)
         return layers
 
     def _copy_image_info(self, img_id):
@@ -432,7 +427,7 @@ class MigrateUtils:
 
         img_id = img_info["id"]
         # Get the layers from the manifest
-        rld = self._get_img_layers(self.src, img_id)
+        rld = self._get_img_layers(self.src, img_info["layer"])
 
         # make sure the src squash file exist
         top_id = rld[-1]["id"]
@@ -480,14 +475,16 @@ class MigrateUtils:
             return False
         img_id = img_info["id"]
         # Get the layers from the manifest
-        rld = self._get_img_layers(self.dst, img_id)
+        rld = self._get_img_layers(self.dst, img_info["layer"])
 
         # make sure the src squash file exist
         top_id = rld[-1]["id"]
         ln = self.dst.read_link_file(top_id)
         sqf = self.dst.get_squash_filename(ln)
         if os.path.exists(sqf):
+            logging.info("Removing squash file")
             os.unlink(sqf)
+        logging.info("Removing image record")
         self.dst.del_rec("images", img_id)
         return True
 
@@ -502,6 +499,7 @@ def usage():
 
 if __name__ == "__main__":  # pragma: no cover
     mu = MigrateUtils()
+    logging.basicConfig(level=logging.INFO)
     dst = os.environ.get("SQUASH_DIR")
     if len(sys.argv) < 2:
         usage()
@@ -520,6 +518,6 @@ if __name__ == "__main__":  # pragma: no cover
         image = sys.argv[2]
         if not dst:
             dst = sys.argv[3]
-        mu.migrate_image(image, dst)
+        mu.migrate_image(image)
     else:
         usage()
