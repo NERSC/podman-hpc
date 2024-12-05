@@ -1,0 +1,7 @@
+name: jupyter
+cli_arg: jupyter
+help: Mount /tmp and home for Jupyter use
+env: MOUNT_JUPYTER
+bind:
+  - /tmp:/tmp
+  - $HOME:$HOME

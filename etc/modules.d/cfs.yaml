@@ -1,0 +1,6 @@
+name: cfs
+cli_arg: cfs
+help: Mount CFS
+env: MOUNT_CFS
+bind:
+  - $CFS:$CFS

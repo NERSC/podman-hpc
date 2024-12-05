@@ -1,0 +1,6 @@
+name: scratch
+cli_arg: scratch
+help: Mount scratch directory
+env: MOUNT_SCRATCH
+bind:
+  - $SCRATCH:$SCRATCH
