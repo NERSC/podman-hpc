@@ -2,6 +2,7 @@
 
 import sys
 import os
+import math
 import socket
 import re
 import time
@@ -12,6 +13,14 @@ from .migrate2scratch import ImageStore
 from .siteconfig import SiteConfig
 from multiprocessing import Process
 from subprocess import Popen, PIPE
+
+
+def _round_nearest(x, a):
+    return round(x / a) * a
+
+
+def _param_scale_log2(x, p):
+    return _round_nearest(p*(1 + math.log2(x)), p)
 
 
 def podman_devnull(cmd, conf):
@@ -310,9 +319,13 @@ def _shared_run(conf, run_args, **site_opts):
         # wait for container to exist
         comm = ["container", "exists", container_name]
         start_time = time.time()
-        while podman_devnull(comm, conf) != 0:
-            time.sleep(conf.wait_poll_interval)
-            if time.time() - start_time > conf.wait_timeout:
+        wait_poll_interval = _param_scale_log2(ntasks, conf.wait_poll_interval)
+        wait_timeout = _param_scale_log2(ntasks, conf.wait_timeout)
+        while True:
+            time.sleep(wait_poll_interval)
+            if podman_devnull(comm, conf) == 0:
+                break
+            if time.time() - start_time > wait_timeout:
                 msg = "Timeout waiting for shared-run start"
                 raise OSError(msg)
             if run_thread and run_thread.exitcode:
