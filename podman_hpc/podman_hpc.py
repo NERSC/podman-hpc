@@ -15,6 +15,9 @@ from multiprocessing import Process
 from subprocess import Popen, PIPE
 
 
+__version__ = "1.1.1"
+
+
 def _round_nearest(x, a):
     return round(x / a) * a
 
@@ -156,6 +159,7 @@ def podhpc(ctx, additional_stores, squash_dir, log_level):
 @pass_siteconf
 def infohpc(siteconf):
     """Dump configuration information for podman_hpc."""
+    print(f"Podman-HPC Version: {__version__}")
     siteconf.dump_config()
     sys.exit()
 
