@@ -11,10 +11,8 @@ build:
 	echo "Nothing to do"
 
 rpmbuild-install: 
-	python3 -m setup install --root=$(DESTDIR) --prefix=/usr
+	python3 -m setup install --root=$(DESTDIR) --prefix=/usr --install-data=/
 	python3 -m podman_hpc.configure_hooks \
 		--hooksd $(DESTDIR)/usr/share/containers/oci/hooks.d
-	mkdir -p $(DESTDIR)/etc/
-	ln -s ../usr/etc/podman_hpc $(DESTDIR)/etc/podman_hpc
 
 install: rpmbuild-install
