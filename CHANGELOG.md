@@ -12,7 +12,7 @@ This is a patch release that primarily implements bugfixes and other minor updat
 - Fix for missing layers that causes a migrated image to not show up on all nodes.
 - Fix for duplicate tagging on migrated images.
 - Fix for timeouts with shared run
-- Adds convience modules for volume mounts
+- Adds convenience modules for volume mounts
 
 ## [1.1.0] - 2023-11-12
 
