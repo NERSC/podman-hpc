@@ -14,7 +14,7 @@
 
 
 Name:           podman-hpc
-Version:        1.1.0
+Version:        1.1.1
 Release:        1
 Summary:	Scripts to enable Podman to run in an HPC environment
 # FIXME: Select a correct license from https://github.com/openSUSE/spec-cleaner#spdx-licenses
@@ -48,7 +48,6 @@ run fully unprivileged.
 %license LICENSE
 %doc CHANGELOG.md README.md
 %config /etc/podman_hpc
-%config /usr/etc/podman_hpc
 /usr/bin/podman-hpc
 /usr/bin/hook_tool
 /usr/bin/fuse-overlayfs-wrap
