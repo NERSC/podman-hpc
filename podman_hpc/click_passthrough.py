@@ -196,7 +196,7 @@ def filterValidOptions(options, subcmd, option_regex=None):
         option_regex = re.compile(r"^\s*(?:(-\w), )?(--\w[\w\-]+)(?:\s(\w+))?")
 
     # create a dummy parser and populate it with valid option flags
-    p = argparse.ArgumentParser(exit_on_error=False, add_help=False)
+    p = argparse.ArgumentParser(exit_on_error=False, allow_abbrev=False, add_help=False)
     with os.popen(" ".join(subcmd)) as f:
         for line in f:
             opt = option_regex.match(line)
