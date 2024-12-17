@@ -206,19 +206,20 @@ def images(ctx, siteconf, image, podman_args, **site_opts):
 @click.argument("podman_args", nargs=-1, type=click.UNPROCESSED)
 @click.argument("image")
 def pull(ctx, siteconf, image, podman_args, **site_opts):
-    """Pulls an image to a local repository and makes a squashed copy."""
-    # Check for transport_prefix
-    if "://" in image:
-        transport_prefix, image = image.split("://", 1)
-    else:
-        transport_prefix = None
-    
+    """Pulls an image to a local repository and makes a squashed copy."""    
     cmd = [siteconf.podman_bin, "pull"]
     cmd.extend(podman_args)
     cmd.extend(siteconf.get_cmd_extensions("pull", site_opts))
     cmd.append(image)
     proc = Popen(cmd)
     proc.communicate()
+
+    # Check for transport_prefix
+    if "://" in image:
+        transport_prefix, image = image.split("://", 1)
+    else:
+        transport_prefix = None
+
     if proc.returncode == 0:
         sys.stdout.write(f"INFO: Migrating image to {siteconf.squash_dir}\n")
         mu = MigrateUtils(conf=siteconf)
