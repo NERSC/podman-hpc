@@ -207,6 +207,12 @@ def images(ctx, siteconf, image, podman_args, **site_opts):
 @click.argument("image")
 def pull(ctx, siteconf, image, podman_args, **site_opts):
     """Pulls an image to a local repository and makes a squashed copy."""
+    # Check for transport_prefix
+    if "://" in image:
+        transport_prefix, image = image.split("://", 1)
+    else:
+        transport_prefix = None
+    
     cmd = [siteconf.podman_bin, "pull"]
     cmd.extend(podman_args)
     cmd.extend(siteconf.get_cmd_extensions("pull", site_opts))
