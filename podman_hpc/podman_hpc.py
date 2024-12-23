@@ -15,7 +15,7 @@ from multiprocessing import Process
 from subprocess import Popen, PIPE
 
 
-__version__ = "1.1.3"
+__version__ = "1.1.4"
 
 
 def _round_nearest(x, a):
