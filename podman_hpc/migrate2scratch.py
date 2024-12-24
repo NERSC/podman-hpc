@@ -422,11 +422,11 @@ class MigrateUtils:
             return False
 
         img_id = img_info["id"]
+        top_id = img_info["layer"]
         # Get the layers from the manifest
-        rld = self._get_img_layers(self.src, img_info["layer"])
+        rld = self._get_img_layers(self.src, top_id)
 
         # make sure the src squash file exist
-        top_id = rld[-1]["id"]
         logging.debug(f"Reading link: {top_id}")
 
         if self.dst.chk_image(img_id):
@@ -468,11 +468,11 @@ class MigrateUtils:
             logging.error(f"Image {image} not found\n")
             return False
         img_id = img_info["id"]
+        top_id = img_info["layer"]
         # Get the layers from the manifest
-        rld = self._get_img_layers(self.dst, img_info["layer"])
+        rld = self._get_img_layers(self.dst, top_id)
 
         # make sure the src squash file exist
-        top_id = rld[-1]["id"]
         ln = self.dst.read_link_file(top_id)
         sqf = self.dst.get_squash_filename(ln)
         if os.path.exists(sqf):
