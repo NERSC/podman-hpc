@@ -272,7 +272,7 @@ def _shared_run(conf, run_args, **site_opts):
     # We need to filter out any run args in the run_args
     cmd = [conf.podman_bin, "run", "--help"]
     valid_params = cpt.filterValidOptions(list(run_args), cmd)
-    # Find the first occurence not in the valid list
+    # Find the first occurrence not in the valid list
     idx = 0
     for idx, item in enumerate(run_args):
         if item in valid_params:
@@ -280,7 +280,7 @@ def _shared_run(conf, run_args, **site_opts):
         break
     image = run_args[idx]
     container_cmd = run_args[idx+1:]
-    # TODO: maybe do some validation on the iamge and container_cmd
+    # TODO: maybe do some validation on the image and container_cmd
 
     options = sys.argv[
         sys.argv.index("shared-run") + 1: sys.argv.index(image)

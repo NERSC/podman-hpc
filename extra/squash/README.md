@@ -4,7 +4,7 @@ This directory contains a Dockerfile that
 can be used to generate a static mksquashfs.
 This utility is required during the migration.
 It needs to be statically compiled so that the
-binary can work on any architectually compatible
+binary can work on any architecturally compatible
 image.
 
 ## Instructions

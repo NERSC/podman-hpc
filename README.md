@@ -12,9 +12,9 @@ The order of precedence from lowest to highest is:
 1. configuration file template (if a template is allowed)
 1. environment variable template (if a template is allowed)
 1. configuration file
-1. enviornment variables
+1. environment variables
 
-The enviornment variable override is the configuration parameter in upper case prefixed
+The environment variable override is the configuration parameter in upper case prefixed
 with PODMANHPC_ (e.g. podman_bin becomes PODMANHPC_PODMAN_BIN).
 
 The list of configurable values is:
@@ -40,7 +40,7 @@ The list of configurable values is:
 Some parameters can be set using a template.  The template is set by the parameter with `_template` appended to the parameter to
 be templated (e.g. graph_root_template would be used to generate the value for the graph_root parameter).
 
-The template replaces strings with `{{ variable }}` with the approriate value. The following variables are supported.
+The template replaces strings with `{{ variable }}` with the appropriate value. The following variables are supported.
 * uid: replaced with the user id of the calling user
 * user: replaced with the user name of the calling user
 * env.VARIABLE: replaced with the value of the environment `VARIABLE`.  For example, env.HOME would be replaced with the value of `HOME`.

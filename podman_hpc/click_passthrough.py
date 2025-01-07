@@ -221,7 +221,7 @@ def filterValidOptions(options, subcmd, option_regex=None):
                 if (opt == uk and idx not in uk_safe_index.get(uk, []))
             ]
         uk = unknowns.pop(0)
-        # find and remove an invalid occurence of uk
+        # find and remove an invalid occurrence of uk
         while True:
             valid_options_tmp = valid_options.copy()
             valid_options_tmp.pop(ukd[uk][0])

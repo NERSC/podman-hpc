@@ -195,7 +195,7 @@ class SiteConfig:
 
         if setval:
             # Expand to a list if the type should be a list
-            # Assumes a common seperated string
+            # Assumes a common separated string
             if isinstance(getattr(self, attr), list) and \
                isinstance(newval, str):
                 newval = newval.split(',')

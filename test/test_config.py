@@ -45,7 +45,7 @@ def test_conf_file(fix_paths, conf_file, monkeypatch):
     assert str(uid) in conf.run_root
     assert f"/imagedir/{user}/storage" == conf.graph_root
     assert f"/tmp/{uid}/run" == conf.run_root
-    # This test environment variable substition and
+    # This test environment variable substitution and
     # environment variables precedence
     monkeypatch.setenv("FOO", "BAR")
     tmpl = "/tmp/{{ env.FOO }}"
