@@ -194,6 +194,14 @@ def images(ctx, siteconf, image, podman_args, **site_opts):
     cmd.extend(podman_args)
     cmd.extend(siteconf.get_cmd_extensions("images", site_opts))
 
+PODMAN_TRANSPORT_PREFIXES = [
+    "docker://",
+    "dir:",
+    "docker-archive:",
+    "docker-daemon:",
+    "oci-archive:",
+]
+
 # podman-hpc pull subcommand (modified) ####################################
 @podhpc.command(
     context_settings=dict(
@@ -206,7 +214,7 @@ def images(ctx, siteconf, image, podman_args, **site_opts):
 @click.argument("podman_args", nargs=-1, type=click.UNPROCESSED)
 @click.argument("image")
 def pull(ctx, siteconf, image, podman_args, **site_opts):
-    """Pulls an image to a local repository and makes a squashed copy."""    
+    """Pulls an image to a local repository and makes a squashed copy."""
     cmd = [siteconf.podman_bin, "pull"]
     cmd.extend(podman_args)
     cmd.extend(siteconf.get_cmd_extensions("pull", site_opts))
@@ -215,10 +223,15 @@ def pull(ctx, siteconf, image, podman_args, **site_opts):
     proc.communicate()
 
     # Check for transport_prefix
-    if "://" in image:
-        transport_prefix, image = image.split("://", 1)
-    else:
-        transport_prefix = None
+    for prefix in PODMAN_TRANSPORT_PREFIXES:
+        if image.startswith(prefix):
+            if prefix != "docker://":
+                sys.stderr.write(
+                    f"""WARNING: Transport prefix '{prefix}' is
+                                 incompatible with podman-hpc.\n"""
+                )
+            image = image[len(prefix):]  # Remove the prefix
+            break
 
     if proc.returncode == 0:
         sys.stdout.write(f"INFO: Migrating image to {siteconf.squash_dir}\n")
