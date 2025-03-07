@@ -356,7 +356,7 @@ class SiteConfig:
             cmds.extend(self.default_images_args)
         else:
             pass
-        
+
         # First pass: identify enabled modules
         enabled_modules = {}
         for mod, mconf in self.sitemods.get(subcommand, {}).items():
@@ -365,7 +365,14 @@ class SiteConfig:
             cli_arg = mconf["cli_arg"].replace("-", "_")
             if args.get(cli_arg, False):
                 enabled_modules[mod] = mconf
-        
+
+        # Store the original formatter
+        original_formatwarning = warnings.formatwarning
+        def format_warning(message, category, filename, lineno, line=None):
+            """ custom formatter that only shows the message """
+            return f"{message}\n"
+        warnings.formatwarning = format_warning
+
         # Second pass: process enabled modules (dependencies, conflicts, and add command extensions)
         for mod, mconf in enabled_modules.items():
             # Check dependencies
@@ -373,27 +380,32 @@ class SiteConfig:
                 for dep in mconf['depends_on']:
                     if dep not in enabled_modules:
                         dep_cli_arg = self.sitemods.get(subcommand, {}).get(dep, {}).get('cli_arg', dep)
-                        warnings.warn(
+                        warning_msg = (
                             f"Module '{mod}' (--{mconf['cli_arg']}) requires '{dep}' to be enabled. "
                             f"Please add --{dep_cli_arg} to your command."
                         )
-            
+                        warnings.warn(warning_msg)
+
             # Check conflicts
             if 'conflicts' in mconf:
                 for conflict in mconf['conflicts']:
                     if conflict in enabled_modules:
                         conflict_cli_arg = self.sitemods.get(subcommand, {}).get(conflict, {}).get('cli_arg', conflict)
-                        warnings.warn(
+                        warning_msg = (
                             f"Module '{mod}' (--{mconf['cli_arg']}) conflicts with '{conflict}' (--{conflict_cli_arg}). "
                             f"These modules cannot be used together."
                         )
-            
-            # Add command extensions
+                        warnings.warn(warning_msg)
+
+
+            #  Add command extensions
             cmds.extend(mconf.get("additional_args", []))
             cmds.extend(["-e", f"{mconf['env']}=1"])
             if mconf.get("shared_run"):
                 self.shared_run = True
-                
+
+        # Restore the original formatter
+        warnings.formatwarning = original_formatwarning
         if self.log_level:
             cmds.extend(["--log-level", self.log_level])
         return cmds
