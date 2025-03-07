@@ -2,6 +2,7 @@ name: openmpi-pmix
 cli_arg: openmpi-pmix
 help: Enable OpenMPI/PMIx Support
 env: ENABLE_OPENMPI_PMIX
+conflicts: ["mpich", "cuda-mpi", "openmpi-pmi2"]
 shared_run: False
 additional_args:
   - --userns=keep-id
