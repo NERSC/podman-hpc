@@ -370,7 +370,7 @@ class SiteConfig:
         original_formatwarning = warnings.formatwarning
         def format_warning(message, category, filename, lineno, line=None):
             """ custom formatter that only shows the message """
-            return f"{message}\n"
+            return f"WARNING: {message}\n"
         warnings.formatwarning = format_warning
 
         # Second pass: process enabled modules (dependencies, conflicts, and add command extensions)
