@@ -3,6 +3,7 @@ import os
 import shutil
 import toml
 import re
+import warnings
 from yaml import load
 from yaml import FullLoader
 from copy import deepcopy
@@ -372,7 +373,7 @@ class SiteConfig:
                 for dep in mconf['depends_on']:
                     if dep not in enabled_modules:
                         dep_cli_arg = self.sitemods.get(subcommand, {}).get(dep, {}).get('cli_arg', dep)
-                        raise ValueError(
+                        warnings.warn(
                             f"Module '{mod}' (--{mconf['cli_arg']}) requires '{dep}' to be enabled. "
                             f"Please add --{dep_cli_arg} to your command."
                         )
@@ -382,7 +383,7 @@ class SiteConfig:
                 for conflict in mconf['conflicts']:
                     if conflict in enabled_modules:
                         conflict_cli_arg = self.sitemods.get(subcommand, {}).get(conflict, {}).get('cli_arg', conflict)
-                        raise ValueError(
+                        warnings.warn(
                             f"Module '{mod}' (--{mconf['cli_arg']}) conflicts with '{conflict}' (--{conflict_cli_arg}). "
                             f"These modules cannot be used together."
                         )
