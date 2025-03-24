@@ -2,7 +2,6 @@ name: cuda-mpi
 cli_arg: cuda-mpi
 help: Enable CUDA-aware Cray MPICH Support
 env: ENABLE_CUDA_MPICH_SS
-conflicts: ["mpich", "openmpi-pmi2", "openmpi-pmix"]
 shared_run: True
 additional_args:
   - -e SLURM_*
