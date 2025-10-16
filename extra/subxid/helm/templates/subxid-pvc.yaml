@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  annotations:
+    volume.beta.kubernetes.io/storage-provisioner: cephfs.csi.ceph.com
+  name: subxid-pvc
+  namespace: {{ .Values.namespace }}
+spec:
+  accessModes:
+  - ReadWriteMany
+  resources:
+    requests:
+      storage: {{ .Values.subxidPVC.storage }}
+  storageClassName: ceph-cephfs-external
+  volumeMode: Filesystem

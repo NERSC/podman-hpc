@@ -1,0 +1,89 @@
+#!/usr/bin/python3
+
+import os
+import sys
+import contextlib
+import ldap3
+import logging
+import time
+from logging.handlers import SysLogHandler
+
+
+@contextlib.contextmanager
+def ldap_connection(*args, **kwargs):
+    try:
+        server = ldap3.Server(*args, **kwargs)
+        connection = ldap3.Connection(server)
+        connection.bind()
+        yield server,connection
+    finally:
+        connection.unbind()
+
+
+def get_config(fn):
+    conf = {
+            'ldap_server': os.environ.get('LDAP_SERVER','ldapcrt.nersc.gov'),
+            'base_dn': os.environ.get('LDAP_BASE', 'ou=people,ou=nim-ldap,ou=host,o=ldapsvc,dc=nersc,dc=gov')
+           }
+    if os.path.exists(fn):
+        with open(fn) as f:
+            for line in f:
+                (key, val) = line.rstrip().replace(' ','').split(':', 1)
+                conf[key] = val
+    return conf
+
+
+def ldap_check(ldap_server, base_dn):
+    with ldap_connection(ldap_server, port=636, use_ssl=True, connect_timeout=30) as (_,conn):
+        search = '(description=*:*)'
+        attr = ['uid', 'description']
+        conn.search(base_dn, search, attributes=attr)
+
+        # Just return an empty list if this fails
+        if not conn.entries or len(conn.entries) == 0:
+            logger.error('LDAP returned emptry results')
+            raise ValueError('LDAP returned emptry results')
+        results = []
+        for entry in conn.entries:
+            uname = entry['uid']
+            (_, s_off, s_length) = str(entry['description']).split(':')
+            off = int(s_off)
+            length = int(s_length)
+            results.append({"user": uname, "offset": off, "len": length, "end": off+length})
+    return results
+
+
+def main():
+    logger = logging.getLogger('Logger')
+    if 'DEBUG_GEN_MAPS' in os.environ:
+        logger.setLevel(logging.DEBUG)
+        stream_handler = logging.StreamHandler()
+        logger.addHandler(stream_handler)
+    if os.path.exists('/dev/log'):
+       handler = logging.handlers.SysLogHandler(address = '/dev/log')
+       logger.addHandler(handler)
+    cf = os.environ.get('SUBXID_CONF', '/etc/subxid.conf')
+    conf = get_config(cf)
+    outfn = sys.argv[1]
+    newfn = f"{outfn}.new"
+    sleep_time = int(os.environ.get("SLEEP_TIME", "60"))
+
+    while True:
+        try:
+            results = ldap_check(conf['ldap_server'], conf['base_dn'])
+            
+            with open(newfn, "wt") as f:
+                for line in results:
+                    f.write("{user}:{offset}:{len}\n".format(**line))
+            os.rename(newfn, outfn)
+        except ldap3.core.exceptions.LDAPSocketOpenError:
+            logger.error('LDAP failed')
+        except ValueError as ex:
+            logger.error(ex)
+        except Exception as ex:
+            logger.error(ex)
+        time.sleep(sleep_time)
+
+
+if __name__ == "__main__":
+    main()

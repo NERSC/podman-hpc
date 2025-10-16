@@ -1,0 +1,11 @@
+[Unit]
+Description=Do subxid update
+
+[Service]
+Type=oneshot
+Nice=5
+IOSchedulingClass=idle
+ExecStart=/bin/bash -c 'wget -O /etc/subuid --tries=1 --quiet http://{{ subxid_ip }}/subxid && cp /etc/subuid /etc/subgid'
+
+[Install]
+WantedBy=nersc.target

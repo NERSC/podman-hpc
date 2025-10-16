@@ -1,0 +1,5 @@
+apiVersion: v2
+name: subxid-service
+description: Service to retrieve sub[u,g]id information from NERSC LDAP.
+version: 0.0.1
+appVersion: 1.0.0

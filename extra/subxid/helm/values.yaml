@@ -1,0 +1,30 @@
+
+namespace: subxid
+
+subxidService:
+  image: nersc/subxid:latest
+
+subxidWeb:
+  image: nginx:stable-alpine
+  replicas: 1
+  #ip: '10.252.2.8'
+  port: 80
+  
+subxidPVC:
+  storage: 1Gi
+
+
+
+#net:
+#  nmn_cidr: '10.252.0.0/17'
+#  nmn_mtn_cidr: '10.100.0.0/17'
+#  nmn_gateway: '10.252.0.1'
+#  macvlan_interface: 'vlan002'
+
+ingress:
+  enabled: True
+
+service:
+  type: "ClusterIP"
+  port: "80"
+

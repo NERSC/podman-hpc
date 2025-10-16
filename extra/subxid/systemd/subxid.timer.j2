@@ -1,0 +1,13 @@
+[Unit]
+Description=Do hourly subxid update
+Documentation=man:mandb(8) man:catman(8)
+
+[Timer]
+OnCalendar=hourly
+AccuracySec=1us
+Persistent=true
+OnBootSec=15min
+RandomizedDelaySec=600
+
+[Install]
+WantedBy=timers.target
