@@ -1,3 +1,4 @@
+"""Site configuration management for Podman-HPC."""
 import sys
 import os
 import shutil
@@ -68,6 +69,7 @@ class SiteConfig:
     source = dict()
 
     def __init__(self, squash_dir=None, log_level=None):
+        """Initialize site configuration from defaults, file, and environment."""
 
         # getlogin may fail on a compute node
         try:
@@ -169,26 +171,31 @@ class SiteConfig:
             )
         return res
 
-    def _check_and_set(self, attr: str, envname=None, parname=None):
+    @staticmethod
+    def try_which(cmd, *args, **kwargs):
+        """Alias for trywhich with clearer naming."""
+        return SiteConfig.trywhich(cmd, *args, **kwargs)
+
+    def _check_and_set(self, attr: str, env_name=None, param_name=None):
         """
         Helper function to apply the right precedence
         """
         source = "default"
-        if not parname:
-            parname = attr
-        if not envname:
+        if not param_name:
+            param_name = attr
+        if not env_name:
             uppar = attr.upper()
-            envname = f"{_ENV_PREFIX}_{uppar}"
+            env_name = f"{_ENV_PREFIX}_{uppar}"
 
         setval = False
-        if envname in os.environ:
+        if env_name in os.environ:
             setval = True
-            newval = os.environ[envname]
-            source = f"env: {envname}"
-        elif parname in self.conf_file_data:
+            newval = os.environ[env_name]
+            source = f"env: {env_name}"
+        elif param_name in self.conf_file_data:
             setval = True
-            newval = self.conf_file_data[parname]
-            source = f"file: {parname}"
+            newval = self.conf_file_data[param_name]
+            source = f"file: {param_name}"
         if setval and attr.endswith("_template"):
             setattr(self, attr, newval)
             newval = self._apply_template(newval)
@@ -235,10 +242,11 @@ class SiteConfig:
         config_file = os.environ.get(_CONF_ENV, self._default_conf_file)
         if not os.path.exists(config_file):
             return
-        self.conf_file_data = load(open(config_file), Loader=FullLoader)
+        with open(config_file, encoding="utf-8") as fp:
+            self.conf_file_data = load(fp, Loader=FullLoader)
         for p in self.conf_file_data:
             if p not in self._valid_params and p not in self._valid_templates:
-                raise ValueError(f"Unrecongnized Option: {p}")
+                raise ValueError(f"Unrecognized Option: {p}")
 
     def get_default_store_conf(self):
         """
@@ -277,6 +285,10 @@ class SiteConfig:
         }
 
     def additionalimagestore(self):
+        """Backward compatible name for additional_image_stores_string."""
+        return self.additional_image_stores_string()
+
+    def additional_image_stores_string(self):
         ais = [self.squash_dir]
         ais.extend(self.additional_stores)
         return ','.join(ais)
@@ -285,19 +297,19 @@ class SiteConfig:
         """
         Create a storage conf object
         """
-        sc = self.get_default_store_conf()
-        ais = sc["storage"]["options"].setdefault("additionalimagestores", [])
-        ais.append(self.squash_dir)
+        store_conf = self.get_default_store_conf()
+        additional_store_paths = store_conf["storage"]["options"].setdefault("additionalimagestores", [])
+        additional_store_paths.append(self.squash_dir)
         if additional_stores:
-            ais.extend(additional_stores.split(","))
-        self.storage_conf = sc
+            additional_store_paths.extend(additional_stores.split(","))
+        self.storage_conf = store_conf
 
     def config_containers(self):
         """
         Create a container conf object
         """
-        cc = self.get_default_containers_conf()
-        self.container_conf = cc
+        container_conf = self.get_default_containers_conf()
+        self.container_conf = container_conf
 
     def config_env(self, hpc):
         """
@@ -319,9 +331,9 @@ class SiteConfig:
             f"/tmp/containers-user-{self._uid}/containers", exist_ok=True
         )
         os.makedirs(f"{self.config_home}/containers", exist_ok=True)
-        fp = os.path.join(self.config_home, "containers", filename)
-        if not os.path.exists(fp) or overwrite:
-            with open(fp, "w") as f:
+        file_path = os.path.join(self.config_home, "containers", filename)
+        if not os.path.exists(file_path) or overwrite:
+            with open(file_path, "w", encoding="utf-8") as f:
                 toml.dump(data, f)
 
     def export_storage_conf(self, filename="storage.conf", overwrite=False):
@@ -416,10 +428,12 @@ class SiteConfig:
     # to parse appropriately.  This would allow adding site-specific default
     # flags for any podman subcommand.
     def read_site_modules(self):
+        """Read YAML module configurations from `modules_dir`."""
         mods = {}
         active_mods = []
         for modfile in glob(f"{self.modules_dir}/*.yaml"):
-            mod = load(open(modfile), Loader=FullLoader)
+            with open(modfile, encoding="utf-8") as fp:
+                mod = load(fp, Loader=FullLoader)
             mods[mod["name"]] = mod
             active_mods.append(modfile)
         self.active_modules = active_mods

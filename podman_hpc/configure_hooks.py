@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""Write and install a hooks.json for the podman-hpc hook tool."""
 import sys
 import os
 import pathlib
@@ -26,18 +27,28 @@ hook_text = cleandoc(
 )
 
 
-def write_hook(hooksd, hook, filemode):
-    hook_path = os.path.join(hooksd, hook)
-    os.makedirs(hooksd, exist_ok=True)
+def write_hook(hooks_dir_path, hook, filemode):
+    """Write the hook JSON text to the specified hooks directory.
+
+    Parameters
+    - hooks_dir_path: path to the hooks directory
+    - hook: filename to write within hooks directory
+    - filemode: "x" to create, "w" to overwrite
+    """
+    hook_path = os.path.join(hooks_dir_path, hook)
+    os.makedirs(hooks_dir_path, exist_ok=True)
     try:
-        with open(hook_path, filemode) as fid:
-            fid.write(hook_text)
+        with open(hook_path, filemode, encoding="utf-8") as file_handle:
+            file_handle.write(hook_text)
         print(f"Successfully wrote hook configuration at {hook_path}")
     except FileExistsError:
         print(f"Hook is already configured at {hook_path}. No changes made.")
+    except OSError as ex:
+        print(f"Failed to write hook at {hook_path}: {ex}", file=sys.stderr)
 
 
 def main():
+    """CLI entrypoint for installing hook configuration."""
     p = argparse.ArgumentParser(
         prog="configure_hooks",
         description="Write a hooks.json and install to hooksd for podman-hpc.",

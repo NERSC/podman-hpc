@@ -1,6 +1,12 @@
 import podman_hpc.siteconfig as config
 import os
 import pytest
+import warnings
+
+
+def warning_contains(recorded_warnings, text):
+    """Helper function to check if any warning contains the specified text."""
+    return any(text in str(w.message) for w in recorded_warnings)
 
 
 @pytest.fixture
@@ -101,3 +107,25 @@ def test_typing(fix_paths, monkeypatch, tmp_path):
     uid = os.getuid()
     user = os.getlogin()
     assert conf.default_run_args == [str(uid), user]
+
+
+def test_module_dependencies(fix_paths, monkeypatch):
+    test_dir = os.path.dirname(__file__)
+    modules_dir = os.path.join(test_dir, "..", "etc", "modules.d")
+    monkeypatch.setenv("PODMANHPC_MODULES_DIR", modules_dir)
+    conf = config.SiteConfig(squash_dir="/tmp", log_level="DEBUG")
+    
+    # Test dependency warning
+    with pytest.warns(UserWarning) as recorded_warnings:
+        conf.get_cmd_extensions("run", {"test_deps": True})
+        assert warning_contains(recorded_warnings, "requires 'scratch' to be enabled")
+    
+    # Test dependency satisfied (no warning)
+    with warnings.catch_warnings(record=True) as recorded_warnings:
+        conf.get_cmd_extensions("run", {"test_deps": True, "scratch": True})
+        assert len(recorded_warnings) == 0
+    
+    # Test conflict warning
+    with pytest.warns(UserWarning) as recorded_warnings:
+        conf.get_cmd_extensions("run", {"test_deps": True, "scratch": True, "test_conflict": True})
+        assert warning_contains(recorded_warnings, "conflicts with 'test-conflict'")
