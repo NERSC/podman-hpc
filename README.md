@@ -69,3 +69,25 @@ in an isolated python environment for development or testing.
 1. `python -m podman_hpc.configure_hooks`
 1. (Optional) Add/edit site modules as required in `<podman-hpc python sys.prefix>/etc/podman_hpc/modules.d`
 
+
+## Debugging Hook Tool
+
+Podman-HPC includes a hook tool script that provides some pre-start OCI hook.  This handles some operations like copy and updating ldconfig.  To debug the hook_tool set an environment for the container called LOG_PLUGIN that points specifies an output filename.
+
+For example:
+
+```
+podman-hpc run -it --gpu  -e LOG_PLUGIN=/tmp/hook.dbg centos:8 nvidia-smi
+```
+
+If you want to override or test a development version of the hook tool you will need to copy the configuration directory and modify the config.
+The location of the configuration can be found with `podman-hpc infohpc | grep hooks_dir`.  Make a copy of that directory location and modify
+`02-hook_tool.json`.  You can configure podman-hpc to use the new directory by setting `PODMANHPC_HOOKS_DIR` to the directory.  For example...
+
+```
+SRC=$(podman-hpc infohpc|grep hooks|sed 's/.*: //')
+cp -a $SRC $HOME/hooks.d
+export PODMANHPC_HOOKS_DIR=$HOME/hooks.d
+```
+
+When modifying the hook it helpful to understand the context of where it runs.  It is started in a username space but not in the mount space of the container.  It starts in the directory that contains the `config.json`.  The config file can be used to query variables for the container such as environment variables and the root path.  Modifying the `config.json` will not have an effect on the container.  So this can not be used to modify the behavior of the container.  The hook also receives configuration information on stdin including certain locations and annotations.
