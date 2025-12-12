@@ -69,3 +69,53 @@ in an isolated python environment for development or testing.
 1. `python -m podman_hpc.configure_hooks`
 1. (Optional) Add/edit site modules as required in `<podman-hpc python sys.prefix>/etc/podman_hpc/modules.d`
 
+
+## Debugging Hook Tool
+
+Podman-HPC includes a hook tool script that provides some pre-start OCI hook.  This handles some operations like copy and updating ldconfig.  To debug the hook_tool set an environment for the container called LOG_PLUGIN that points specifies an output filename.
+
+For example:
+
+```
+podman-hpc run -it --gpu  -e LOG_PLUGIN=/tmp/hook.dbg centos:8 nvidia-smi
+```
+
+If you want to override or test a development version of the hook tool you will need to 
+create a custom hooks directory and use `PODMANHPC_HOOKS_DIR` to point to the hooks directory.
+For example, the following can be used to capture all standard out and standard error from the hook script:
+
+```
+mkdir $HOME/hooks.d
+vi $HOME/hooks.d/02-hook_tool.json
+vi /path/to/hook_tool.sh
+chmod a+rx /path/to/hook_tool.sh
+export PODMANHPC_HOOKS_DIR=$HOME/hooks.d
+```
+
+with `02-hool_tool.json` container:
+```json
+{
+    "version": "1.0.0",
+    "hook": {
+        "path": "/path/to/hook_tool.sh",
+        "args": ["hook_tool"]
+    },
+    "when": {
+        "annotations": {
+           "podman_hpc.hook_tool": "true"
+        }
+    },
+    "stages": ["prestart"]
+}
+```
+
+and `/path/to/hook_tool.sh` container:
+
+```sh
+#!/bin/bash
+
+exec hook_tool $@  >> /tmp/hook.dbg 2>&1
+```
+
+When modifying the hook it helpful to understand the context of where it runs.  It is started in a username space but not in the mount space of the container.  It starts in the directory that contains the `config.json`.  The config file can be used to query variables for the container such as environment variables and the root path.  Modifying the `config.json` will not have an effect on the container.  So this can not be used to modify the behavior of the container.  The hook also receives configuration information on stdin including certain locations and annotations.  Finally, the output from the script isn't
+captured by the podman log (as far as we can tell).  So use the example above to capture that to a file.
