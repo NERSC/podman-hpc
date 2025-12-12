@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+"""CLI entrypoint and subcommands for Podman-HPC."""
 
 import sys
 import os
@@ -19,17 +20,22 @@ __version__ = "1.1.4"
 
 
 def _round_nearest(x, a):
+    """Round x to the nearest multiple of a."""
     return round(x / a) * a
 
 
 def _param_scale_log2(x, p):
+    """Scale parameter p as p*(1 + log2(x)) and round to nearest p."""
     return _round_nearest(p*(1 + math.log2(x)), p)
 
 
 def podman_devnull(cmd, conf):
     """
-    Run a command and ignore the output.
-    Returns the exit code
+    Run a podman subcommand and ignore output, return exit code.
+
+    Parameters
+    - cmd: list[str] subcommand args, e.g. ["container", "exists", "name"]
+    - conf: SiteConfig
     """
     newcmd = [conf.podman_bin]
     newcmd.extend(conf.get_cmd_extensions(cmd[0], None))
@@ -52,8 +58,8 @@ def pmi_fd():
 
     if "PMI_FD" not in os.environ:
         return []
-    pmifd = int(os.environ['PMI_FD'])
-    os.dup2(pmifd, 3)
+    pmi_fd_value = int(os.environ['PMI_FD'])
+    os.dup2(pmi_fd_value, 3)
     os.set_inheritable(3, True)
     os.environ['PMI_FD'] = "3"
     return ["--preserve-fds", "1"]
@@ -63,6 +69,7 @@ def pmi_fd():
 # follows the style of click.Command.format_help()
 # this will be inherited by subcommands created with @podhpc.command()
 def podman_format(self, ctx, formatter):
+    """Custom help formatting to mimic podman help page layout."""
     self.format_short_help(ctx, formatter)
     self.format_description(ctx, formatter)
     formatter.write_paragraph()
@@ -75,7 +82,7 @@ def podman_format(self, ctx, formatter):
 
 # parse the `podman --help` page so it can be added as a custom epilog to
 # main command help
-initenv = os.environ
+original_env = os.environ
 if "XDG_RUNTIME_DIR" in os.environ:
     os.environ.pop("XDG_RUNTIME_DIR")
 with os.popen("podman --help") as fid:
@@ -86,7 +93,7 @@ with os.popen("podman --help") as fid:
         podman_epilog = re.sub(r"(\n\s*\n)(?=\S)", "\n\n\b\n", text)
     except Exception:
         podman_epilog = "For additional commands please see `podman --help`."
-os.environ = initenv
+os.environ = original_env
 
 # decorator so that subcommands can request to receive SiteConfig object
 pass_siteconf = click.make_pass_decorator(SiteConfig, ensure=True)
@@ -126,32 +133,32 @@ def podhpc(ctx, additional_stores, squash_dir, log_level):
 
     # set up site configuration object
     try:
-        conf = SiteConfig(squash_dir=squash_dir, log_level=log_level)
+        site_config = SiteConfig(squash_dir=squash_dir, log_level=log_level)
     except Exception as ex:
         sys.stderr.write(f"Error: {ex}... Exiting\n")
         sys.exit(1)
 
-    if not os.path.exists(conf.squash_dir):
-        ImageStore(conf.squash_dir, read_only=False).init_storage()
-    conf.read_site_modules()
-    conf.config_env(hpc=True)
+    if not os.path.exists(site_config.squash_dir):
+        ImageStore(site_config.squash_dir, read_only=False).init_storage()
+    site_config.read_site_modules()
+    site_config.config_env(hpc=True)
 
     # add appropriate flags to call_podman based on invoked subcommand
     # defcmd = ctx.command.default_command_fn
-    invcmd = ctx.command.get_command(ctx, ctx.invoked_subcommand)
-    for k, v in conf.sitemods.get(ctx.invoked_subcommand, {}).items():
+    invoked_cmd = ctx.command.get_command(ctx, ctx.invoked_subcommand)
+    for k, v in site_config.sitemods.get(ctx.invoked_subcommand, {}).items():
         if 'cli_arg' not in v:
             continue
-        invcmd = click.option(
+        invoked_cmd = click.option(
             f"--{v['cli_arg']}",
             is_flag=True,
             hidden=v.get("hidden", False),
             help=v.get("help"),
-        )(invcmd)
+        )(invoked_cmd)
 
     # save the site config to a context object so it can be passed to
     # subcommands
-    ctx.obj = conf
+    ctx.obj = site_config
 
 
 # podman-hpc infohpc subcommand ############################################
@@ -262,33 +269,37 @@ def _shared_run(conf, run_args, **site_opts):
     that has shared_run set to True. 
     """
 
-    localid = os.environ.get(conf.localid_var)
-    ntasks_raw = os.environ.get(conf.tasks_per_node_var, "1")
-    ntasks = int(re.search(conf.ntasks_pattern, ntasks_raw)[0])
+    local_task_id = os.environ.get(conf.localid_var)
+    tasks_per_node_raw = os.environ.get(conf.tasks_per_node_var, "1")
+    try:
+        tasks_per_node_match = re.search(conf.ntasks_pattern, tasks_per_node_raw)
+        ntasks = int(tasks_per_node_match[0]) if tasks_per_node_match else 1
+    except Exception:
+        ntasks = 1
     container_name = f"uid-{os.getuid()}-pid-{os.getppid()}"
-    sock_name = f"/tmp/uid-{os.getuid()}-pid-{os.getppid()}"
+    socket_path = f"/tmp/uid-{os.getuid()}-pid-{os.getppid()}"
 
     # construct run and exec commands from user options
     # We need to filter out any run args in the run_args
     cmd = [conf.podman_bin, "run", "--help"]
-    valid_params = cpt.filterValidOptions(list(run_args), cmd)
+    valid_params = cpt.filter_valid_options(list(run_args), cmd)
     # Find the first occurence not in the valid list
-    idx = 0
-    for idx, item in enumerate(run_args):
+    image_index = 0
+    for image_index, item in enumerate(run_args):
         if item in valid_params:
             continue
         break
-    image = run_args[idx]
-    container_cmd = run_args[idx+1:]
+    image = run_args[image_index]
+    container_command = run_args[image_index+1:]
     # TODO: maybe do some validation on the iamge and container_cmd
 
-    options = sys.argv[
+    passthrough_options = sys.argv[
         sys.argv.index("shared-run") + 1: sys.argv.index(image)
     ]
 
     run_cmd = [conf.podman_bin, "run", "--rm", "-d", "--name", container_name]
     run_cmd.extend(
-        cpt.filterValidOptions(options, [conf.podman_bin, "run", "--help"])
+        cpt.filter_valid_options(passthrough_options, [conf.podman_bin, "run", "--help"])
     )
     run_cmd.extend(conf.get_cmd_extensions("run", site_opts))
     run_cmd.append(image)
@@ -302,9 +313,9 @@ def _shared_run(conf, run_args, **site_opts):
     exec_cmd.extend(pmi_fd())
     exec_cmd.extend(conf.shared_run_exec_args)
     exec_cmd.extend(
-        cpt.filterValidOptions(options, [conf.podman_bin, "exec", "--help"])
+        cpt.filter_valid_options(passthrough_options, [conf.podman_bin, "exec", "--help"])
     )
-    exec_cmd.extend([container_name] + list(container_cmd))
+    exec_cmd.extend([container_name] + list(container_command))
     # click.echo(f"run_cmd is: {run_cmd}")
     # click.echo(f"exec_cmd is: {exec_cmd}")
 
@@ -312,8 +323,8 @@ def _shared_run(conf, run_args, **site_opts):
     monitor_thread = None
     run_thread = None
     proc = None
-    if (localid is None or int(localid) == 0):
-        monitor_thread = Process(target=monitor, args=(sock_name, ntasks,
+    if (local_task_id is None or int(local_task_id) == 0):
+        monitor_thread = Process(target=monitor, args=(socket_path, ntasks,
                                                        container_name, conf))
         monitor_thread.start()
         run_thread = Process(target=shared_run_exec, args=(run_cmd, conf.env))
@@ -342,7 +353,7 @@ def _shared_run(conf, run_args, **site_opts):
             conf.env["PMI_FD"] = os.environ["PMI_FD"]
         proc = Popen(exec_cmd, env=conf.env, pass_fds=fds)
         proc.communicate()
-        send_complete(sock_name, localid)
+        send_complete(socket_path, local_task_id)
         # Close out threads
         if monitor_thread:
             monitor_thread.join()
@@ -355,8 +366,8 @@ def _shared_run(conf, run_args, **site_opts):
             monitor_thread.kill()
         if run_thread:
             run_thread.kill()
-        if os.path.exists(sock_name):
-            os.remove(sock_name)
+        if os.path.exists(socket_path):
+            os.remove(socket_path)
     finally:
         exit_code = 1
         if proc:
@@ -417,6 +428,7 @@ def call_podman(ctx, siteconf, help, podman_args, **site_opts):
 
 
 def shared_run_exec(run_cmd, env):
+    """Run the 'podman run' command and surface stderr on failure."""
     proc = Popen(run_cmd, stdout=PIPE, stderr=PIPE, env=env)
     out, err = proc.communicate()
     if proc.returncode != 0:
@@ -424,18 +436,19 @@ def shared_run_exec(run_cmd, env):
 
 
 def monitor(sockfile, ntasks, container_name, conf):
-    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    """Accept ntasks connections on a UNIX socket then stop the container."""
+    server_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     try:
         os.remove(sockfile)
     except OSError:
         pass
-    s.bind(sockfile)
-    ct = 0
+    server_socket.bind(sockfile)
+    connections_count = 0
     while True:
-        s.listen()
-        conn, addr = s.accept()
-        ct += 1
-        if ct == ntasks:
+        server_socket.listen()
+        conn, addr = server_socket.accept()
+        connections_count += 1
+        if connections_count == ntasks:
             break
     conn.close()
     os.remove(sockfile)
@@ -444,14 +457,15 @@ def monitor(sockfile, ntasks, container_name, conf):
     podman_devnull(["rm", container_name], conf)
 
 
-def send_complete(sockfile, lid):
+def send_complete(sockfile, local_id):
+    """Signal completion by connecting and sending a short message."""
     try:
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         s.connect(sockfile)
-        s.send(bytes(lid, 'utf-8'))
+        s.send(bytes(local_id, 'utf-8'))
         s.close()
     except Exception as ex:
-        sys.stderr.write(f"send_complete failed for {lid}\n{ex}\n")
+        sys.stderr.write(f"send_complete failed for {local_id}\n{ex}\n")
 
 
 def main():

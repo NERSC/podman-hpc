@@ -1,4 +1,5 @@
 #!/usr/bin/python
+"""Utilities for migrating Podman images into a squashed image store."""
 import os
 import sys
 import json
@@ -9,25 +10,29 @@ import logging
 DEBUG = os.environ.get("DEBUG_M2SQ", False)
 
 
-def merge_recs(recs_list, key):
-    """
-    Generic method to merge a list of records
-    """
-    res = []
-    done = {}
-    for recs in recs_list:
-        for r in recs:
-            id = r[key]
-            if id not in done:
-                res.append(r)
-                done[id] = r
-    return res
+def merge_records_preserve_first(record_lists, key_name):
+    """Merge a list of records preserving the first occurrence by key."""
+    merged_records = []
+    seen_keys = {}
+    for records in record_lists:
+        for record in records:
+            record_key = record[key_name]
+            if record_key not in seen_keys:
+                merged_records.append(record)
+                seen_keys[record_key] = record
+    return merged_records
+
+
+def merge_recs(recs_list, key):  # Backward compatibility wrapper
+    return merge_records_preserve_first(recs_list, key)
 
 
 class ImageStore:
     """
-    Class to provide some basic functions for interacting with
-    an image store.
+    Provide basic functions for interacting with an image store.
+
+    The directory structure is expected to resemble Podman's overlay store
+    layout including overlay, overlay-images, and overlay-layers.
     """
 
     images = []
@@ -46,51 +51,59 @@ class ImageStore:
         self.overlay_dir = os.path.join(base, "overlay")
         self.read_only = read_only
         if os.path.exists(self.images_json):
-            self.images = json.load(open(self.images_json))
+            with open(self.images_json, encoding="utf-8") as fp:
+                self.images = json.load(fp)
         if os.path.exists(self.layers_json):
-            self.layers = json.load(open(self.layers_json))
+            with open(self.layers_json, encoding="utf-8") as fp:
+                self.layers = json.load(fp)
 
     def refresh(self):
         """
         Currently just used in testing.
         """
         if os.path.exists(self.images_dir):
-            self.images = json.load(open(self.images_json))
-            self.layers = json.load(open(self.layers_json))
+            with open(self.images_json, encoding="utf-8") as fp:
+                self.images = json.load(fp)
+            with open(self.layers_json, encoding="utf-8") as fp:
+                self.layers = json.load(fp)
 
-    def get_img_info(self, img_name):
+    def get_image_info(self, image_name):
         """
-        Finds the image info by name.  This tries different variant
-        including adding repositories and latest tag.
+        Find image info by name. Tries different variants including repos and tag.
 
         Inputs:
-        img_name: name to lookup. Can be a short form.
+        image_name: name to lookup. Can be a short form.
         """
         # Try exact match
-        for img in self.images:
-            if img["id"].startswith(img_name):
+        for image in self.images:
+            if image["id"].startswith(image_name):
                 logging.debug("Found by ID")
-                return img, img["id"]
-        if ":" not in img_name:
-            img_name = f"{img_name}:latest"
-        prefs = ["", "docker.io/", "docker.io/library/", "localhost/"]
-        for pref in prefs:
-            long_name = f"{pref}{img_name}"
-            for img in self.images:
-                for n in img.get("names", []):
+                return image, image["id"]
+        if ":" not in image_name:
+            image_name = f"{image_name}:latest"
+        prefixes = ["", "docker.io/", "docker.io/library/", "localhost/"]
+        for pref in prefixes:
+            long_name = f"{pref}{image_name}"
+            for image in self.images:
+                for n in image.get("names", []):
                     if long_name == n:
-                        return img, long_name
+                        return image, long_name
         return None, None
 
-    def get_manifest(self, imgid):
+    # Backward compatibility wrapper
+    def get_img_info(self, img_name):
+        return self.get_image_info(img_name)
+
+    def get_manifest(self, image_id):
         """
-        Retruns the contents of the manifest for the given image ID
+        Return the contents of the manifest for the given image ID.
 
         Inputs:
-        imgid: image id
+        image_id: image id
         """
-        mf = os.path.join(self.images_dir, imgid, "manifest")
-        return json.load(open(mf))
+        manifest_path = os.path.join(self.images_dir, image_id, "manifest")
+        with open(manifest_path, encoding="utf-8") as fp:
+            return json.load(fp)
 
     def init_storage(self):
         """
@@ -98,7 +111,7 @@ class ImageStore:
         the minimum directories and JSON files.
         """
         if self.read_only:
-            raise ValueError("Cannot init read-only stroage")
+            raise ValueError("Cannot init read-only storage")
 
         if not os.path.exists(self.base):
             os.mkdir(self.base)
@@ -109,49 +122,59 @@ class ImageStore:
         for typ in ["images", "layers"]:
             pth = f"{self.base}/overlay-{typ}/{typ}.lock"
             if not os.path.exists(pth):
-                with open(pth, "w") as f:
+                with open(pth, "w", encoding="utf-8") as f:
                     f.write("")
             pth = f"{self.base}/overlay-{typ}/{typ}.json"
             if not os.path.exists(pth):
-                with open(pth, "w") as f:
+                with open(pth, "w", encoding="utf-8") as f:
                     f.write("[]")
 
-    def chk_image(self, id):
+    def image_exists(self, image_id):
         """
         Checks if an ID is present in a image store. Returns True/False
 
         Inputs:
-        id: Image ID
+        image_id: Image ID
         """
         for img in self.images:
-            if img["id"] == id:
+            if img["id"] == image_id:
                 return True
         return False
 
-    def del_rec(self, otype, id, key="id"):
+    # Backward compatibility wrapper
+    def chk_image(self, id):
+        return self.image_exists(id)
+
+    def delete_record(self, object_type, object_id, key_name="id"):
         """
         Deletes a record from a JSON file
 
         Inputs:
-        otype: object type (images/layers)
-        id: object id
-        key: key name for the ID
+        object_type: object type (images/layers)
+        object_id: object id
+        key_name: key name for the ID
         """
         if self.read_only:
-            raise ValueError("Cannot init read-only stroage")
+            raise ValueError("Cannot init read-only storage")
 
-        fn = os.path.join(self.base, f"overlay-{otype}", f"{otype}.json")
-        data = json.load(open(fn))
+        json_path = os.path.join(self.base, f"overlay-{object_type}", f"{object_type}.json")
+        with open(json_path, encoding="utf-8") as fp:
+            records = json.load(fp)
         changed = False
         out = []
-        for rec in data:
-            if rec[key] == id:
+        for rec in records:
+            if rec[key_name] == object_id:
                 changed = True
                 continue
             out.append(rec)
         if changed:
-            json.dump(out, open(fn, "w"))
-            logging.debug(f"Updated {fn}")
+            with open(json_path, "w", encoding="utf-8") as fp:
+                json.dump(out, fp)
+            logging.debug(f"Updated {json_path}")
+
+    # Backward compatibility wrapper
+    def del_rec(self, otype, id, key="id"):
+        return self.delete_record(otype, id, key)
 
     def drop_tag(self, tags):
         """
@@ -163,46 +186,53 @@ class ImageStore:
         tags: list of tags
         """
         if self.read_only:
-            raise ValueError("Cannot init read-only stroage")
+            raise ValueError("Cannot init read-only storage")
 
-        data = self.images
+        images_data = self.images
  
-        for img in data:
+        for img in images_data:
             for tag in tags:
                 if tag in img['names']:
                     img['names'].remove(tag)
-        json.dump(data, open(self.images_json, "w"))
-        self.images = data
+        with open(self.images_json, "w", encoding="utf-8") as fp:
+            json.dump(images_data, fp)
+        self.images = images_data
 
-    def add_recs(self, otype, recs):
+    def add_records(self, object_type, records):
         """
         Adds records to the JSON store.
 
         Inputs:
-        otype: Object type (images/layers)
-        recs: list of records to add.
+        object_type: Object type (images/layers)
+        records: list of records to add.
 
         Note: No validation is done on the records other than checking
               for duplicate IDs.
         """
         if self.read_only:
-            raise ValueError("Cannot init read-only stroage")
+            raise ValueError("Cannot init read-only storage")
 
-        fn = os.path.join(self.base, f"overlay-{otype}", f"{otype}.json")
-        data = json.load(open(fn))
+        json_path = os.path.join(self.base, f"overlay-{object_type}", f"{object_type}.json")
+        with open(json_path, encoding="utf-8") as fp:
+            data = json.load(fp)
         by_id = {}
         for row in data:
             by_id[row["id"]] = row
 
         changed = False
-        for rec in recs:
+        for rec in records:
             if rec["id"] not in by_id:
                 data.append(rec)
                 changed = True
         if changed:
-            json.dump(data, open(fn, "w"))
-            logging.debug(f"Updated {fn}")
+            with open(json_path, "w", encoding="utf-8") as fp:
+                json.dump(data, fp)
+            logging.debug(f"Updated {json_path}")
             self.refresh()
+
+    # Backward compatibility wrapper
+    def add_recs(self, otype, recs):
+        return self.add_records(otype, recs)
 
     def get_squash_filename(self, link):
         return os.path.join(self.overlay_dir, "l", f"{link}.squash")
@@ -211,8 +241,9 @@ class ImageStore:
         """
         Read the overlay link file
         """
-        lf = os.path.join(self.overlay_dir, img_id, "link")
-        return open(lf).read()
+        link_path = os.path.join(self.overlay_dir, img_id, "link")
+        with open(link_path, encoding="utf-8") as fp:
+            return fp.read()
 
 
 class MigrateUtils:
@@ -263,20 +294,25 @@ class MigrateUtils:
     @staticmethod
     def _get_paths():
         """
-        Helper function to lookup the default image store.
+        Helper function to lookup the default image store path from config.
         """
         home = os.environ["HOME"]
-        cf = f"{home}/.config/containers/storage.conf"
-        with open(cf) as f:
-            for line in f:
-                if "#" in line:
-                    continue
-                if "graphroot" in line:
-                    val = line.rstrip().split("=")[1]
-                    p = val.replace(" ", "").replace('"', "")
-        return p
+        conf_path = f"{home}/.config/containers/storage.conf"
+        store_path = None
+        try:
+            with open(conf_path, encoding="utf-8") as fp:
+                for line in fp:
+                    if "#" in line:
+                        continue
+                    if "graphroot" in line:
+                        val = line.rstrip().split("=")[1]
+                        store_path = val.replace(" ", "").replace('"', "")
+        except FileNotFoundError:
+            pass
+        # Fall back to a sensible default if not found
+        return store_path or f"/tmp/{os.getuid()}_hpc/storage"
 
-    def _get_img_layers(self, store, top_layer):
+    def _get_image_layers(self, top_layer):
         """
         This finds all the required layers for an image
         including layers coming from dependent images.
@@ -287,7 +323,7 @@ class MigrateUtils:
 
         def _add_parent(layer, layer_map, layers=None, layer_ids=None):
             """
-            Recrusive function to walk up parent graph.
+            Recursive function to walk up parent graph.
 
             Inputs:
             layer: layer to walk
@@ -309,12 +345,16 @@ class MigrateUtils:
 
 
         layer_map = {}
-        all_layers = merge_recs([self.src.layers, self.dst.layers], "id")
+        all_layers = merge_records_preserve_first([self.src.layers, self.dst.layers], "id")
         for layer in all_layers:
             layer_map[layer["id"]] = layer
         layer = layer_map[top_layer]
         layers = _add_parent(layer, layer_map)
         return layers
+
+    # Backward compatibility wrapper
+    def _get_img_layers(self, store, top_layer):
+        return self._get_image_layers(top_layer)
 
     def _copy_image_info(self, img_id):
         srcd = os.path.join(self.src.images_dir, img_id)
@@ -336,29 +376,34 @@ class MigrateUtils:
 
     def _copy_overlay(self, img_id, layers):
         for layer in layers:
-            id = layer["id"]
-            sbpath = os.path.join(self.src.overlay_dir, id)
-            dbpath = os.path.join(self.dst.overlay_dir, id)
-            if os.path.exists(sbpath) and not os.path.exists(dbpath):
-                os.mkdir(dbpath)
+            layer_id = layer["id"]
+            src_layer_dir = os.path.join(self.src.overlay_dir, layer_id)
+            dst_layer_dir = os.path.join(self.dst.overlay_dir, layer_id)
+            if os.path.exists(src_layer_dir) and not os.path.exists(dst_layer_dir):
+                os.mkdir(dst_layer_dir)
             for p in ["empty", "merged", "work", "diff"]:
-                spath = os.path.join(sbpath, p)
-                dpath = os.path.join(dbpath, p)
-                if os.path.exists(spath) and not os.path.exists(dpath):
-                    os.mkdir(dpath)
+                src_path = os.path.join(src_layer_dir, p)
+                dst_path = os.path.join(dst_layer_dir, p)
+                if os.path.exists(src_path) and not os.path.exists(dst_path):
+                    os.mkdir(dst_path)
             # the link
-            src = os.path.join(sbpath, "link")
-            dst = os.path.join(dbpath, "link")
-            if not os.path.exists(dst):
-                logging.debug(f"Copy {src} to{dst}")
-                copy(src, dst)
+            src_link_path = os.path.join(src_layer_dir, "link")
+            dst_link_path = os.path.join(dst_layer_dir, "link")
+            if not os.path.exists(dst_link_path):
+                logging.debug(f"Copy {src_link_path} to{dst_link_path}")
+                copy(src_link_path, dst_link_path)
 
             # Create symlink file
-            link = self.dst.read_link_file(id)
+            link = self.dst.read_link_file(layer_id)
             lname = os.path.join(self.dst.overlay_dir, "l", link)
-            tgt = os.path.join("..", id, "diff")
+            tgt = os.path.join("..", layer_id, "diff")
             if not os.path.exists(lname):
-                os.symlink(tgt, lname)
+                try:
+                    os.symlink(tgt, lname)
+                except FileExistsError:
+                    pass
+                except OSError as ex:
+                    logging.warning(f"Failed to create symlink {lname}: {ex}")
             # Finally the squash file
             # Since there typically isn't a squash file, this is more
             # for future cases
@@ -368,35 +413,35 @@ class MigrateUtils:
                 logging.debug(f"Copy {src} to {dst}")
                 copy(src, dst)
 
-    def _mksq(self, img_id, top_id):
+    def _generate_squashfs(self, img_id, top_id):
         # Get the link name
-        ln = self.dst.read_link_file(top_id)
-        _mksqstatic = self.mksq_bin
-        if not _mksqstatic.startswith("/"):
-            _mksqstatic = which(_mksqstatic)
-        tgt = self.dst.get_squash_filename(ln)
-        if os.path.exists(tgt):
+        link_name = self.dst.read_link_file(top_id)
+        mksquashfs_path = self.mksq_bin
+        if not mksquashfs_path.startswith("/"):
+            mksquashfs_path = which(mksquashfs_path)
+        target_path = self.dst.get_squash_filename(link_name)
+        if os.path.exists(target_path):
             logging.info("Squash file already generated")
             return True
-        logging.info(f"Generating squash file {tgt}")
+        logging.info(f"Generating squash file {target_path}")
         # To make the squash file we will start up a container
         # with the tgt image and then run mksq in it.
         # This requires a statically linked mksquashfs
-        com = [
+        cmd = [
             self.podman_bin, "run", "--rm",
             "--root", self.src.base,
-            "-v", f"{_mksqstatic}:{self._mksq_inside}",
+            "-v", f"{mksquashfs_path}:{self._mksq_inside}",
             "-v", f"{self.dst.base}/overlay/l/:/sqout",
             "--user", "0",
             "--entrypoint", self._mksq_inside,
             img_id,
-            "/", f"/sqout/{ln}.squash",
+            "/", f"/sqout/{link_name}.squash",
         ]
-        com.extend(self.mksq_options)
+        cmd.extend(self.mksq_options)
         # Exclude these
         for ex in self.exclude_list:
-            com.extend(["-e", ex])
-        proc = Popen(com, stdout=PIPE, stderr=PIPE, env=os.environ)
+            cmd.extend(["-e", ex])
+        proc = Popen(cmd, stdout=PIPE, stderr=PIPE, env=os.environ)
         out, err = proc.communicate()
 
         if proc.returncode != 0:
@@ -408,6 +453,10 @@ class MigrateUtils:
         logging.info("Created squash image")
         return True
 
+    # Backward compatibility wrapper
+    def _mksq(self, img_id, top_id):
+        return self._generate_squashfs(img_id, top_id)
+
     def migrate_image(self, image):
         self._lazy_init()
         logging.debug(f"Migrating {image}")
@@ -416,7 +465,7 @@ class MigrateUtils:
         self.dst.refresh()
         # Read in json data
 
-        img_info, fullname = self.src.get_img_info(image)
+        img_info, fullname = self.src.get_image_info(image)
         if not img_info:
             logging.error(f"Image {image} not found\n")
             return False
@@ -424,33 +473,32 @@ class MigrateUtils:
         img_id = img_info["id"]
         top_id = img_info["layer"]
         # Get the layers from the manifest
-        rld = self._get_img_layers(self.src, top_id)
+        required_layers = self._get_image_layers(top_id)
 
         # make sure the src squash file exist
         logging.debug(f"Reading link: {top_id}")
 
-        if self.dst.chk_image(img_id):
+        if self.dst.image_exists(img_id):
             logging.info("Previously migrated")
             return True
 
         # Check if previously tagged image exist
-        dimg = None
         if fullname:
-            dimg, _ = self.dst.get_img_info(fullname)
+            self.dst.get_image_info(fullname)
         self.dst.drop_tag(img_info["names"])
 
         # Copy image info
         self._copy_image_info(img_id)
 
         # Copy layers
-        self._copy_required_layers(rld)
+        self._copy_required_layers(required_layers)
 
         # Overlay
-        self._copy_overlay(img_id, rld)
+        self._copy_overlay(img_id, required_layers)
 
         # Generate squash
         logging.debug(f"squashing {img_id}")
-        resp = self._mksq(img_id, top_id)
+        resp = self._generate_squashfs(img_id, top_id)
         if not resp:
             return False
 
@@ -463,23 +511,23 @@ class MigrateUtils:
         self._lazy_init()
         logging.debug(f"Removing {image}")
         self.dst.refresh()
-        img_info, _ = self.dst.get_img_info(image)
+        img_info, _ = self.dst.get_image_info(image)
         if not img_info:
             logging.error(f"Image {image} not found\n")
             return False
         img_id = img_info["id"]
         top_id = img_info["layer"]
         # Get the layers from the manifest
-        rld = self._get_img_layers(self.dst, top_id)
+        _ = self._get_image_layers(top_id)
 
         # make sure the src squash file exist
-        ln = self.dst.read_link_file(top_id)
-        sqf = self.dst.get_squash_filename(ln)
-        if os.path.exists(sqf):
+        link_name = self.dst.read_link_file(top_id)
+        squash_file_path = self.dst.get_squash_filename(link_name)
+        if os.path.exists(squash_file_path):
             logging.info("Removing squash file")
-            os.unlink(sqf)
+            os.unlink(squash_file_path)
         logging.info("Removing image record")
-        self.dst.del_rec("images", img_id)
+        self.dst.delete_record("images", img_id)
         return True
 
 

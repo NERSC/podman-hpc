@@ -1,10 +1,20 @@
-import os
+"""Click helpers to support passthrough command groups and custom help.
+
+This module provides:
+- DefaultCommandGroup: a click.Group with a default subcommand behavior
+- customize_help: a decorator to customize help formatting for commands
+- PassthroughGroup: a group that can register a passthrough binary as the
+  default command
+- filterValidOptions: filters a set of CLI arguments by parsing a command's
+  help output to retain only valid options for a given subcommand
+"""
 import re
 import click
 import warnings
 import inspect
 import typing as t
 import functools
+import subprocess
 
 try:
     from argparse import ArgumentParser as _
@@ -16,6 +26,12 @@ except TypeError:
 
 
 class DefaultCommandGroup(click.Group):
+    """A click.Group that supports a default subcommand.
+
+    The first command added with `default=True` (or via `default_command`)
+    will be used when a user invokes the group without specifying a subcommand.
+    """
+
     def __init__(self, *args, hide_default=False, **attrs):
         super().__init__(*args, **attrs)
         self.default_command_fn = None
@@ -46,7 +62,7 @@ class DefaultCommandGroup(click.Group):
         if self.command_class and kwargs.get("cls") is None:
             kwargs["cls"] = self.command_class
 
-        func: t.Optional[t.Callable] = None
+        func: t.Optional[t.Callable[..., t.Any]] = None
 
         if args and callable(args[0]):
             assert (
@@ -185,51 +201,79 @@ class PassthroughGroup(DefaultCommandGroup):
         pass
 
 
-def parametersFromPassthrough(cmd, passthrough):
+def parameters_from_passthrough(cmd, passthrough):
+    """Placeholder for extracting parameters from a passthrough command.
+
+    Not implemented.
+    """
     pass
 
 
-def filterValidOptions(options, subcmd, option_regex=None):
+def filter_valid_options(options, subcmd, option_regex=None):
     """Filter invalid arguments from an argument list
     for a given subcommand based on its --help text."""
     if not option_regex:
         option_regex = re.compile(r"^\s*(?:(-\w), )?(--\w[\w\-]+)(?:\s(\w+))?")
 
     # create a dummy parser and populate it with valid option flags
-    p = argparse.ArgumentParser(exit_on_error=False, allow_abbrev=False, add_help=False)
-    with os.popen(" ".join(subcmd)) as f:
-        for line in f:
-            opt = option_regex.match(line)
-            if opt:
-                action = "store" if opt.groups()[2] else "store_true"
-                flags = [flag for flag in opt.groups()[:-1] if flag]
-                p.add_argument(*flags, action=action)
+    parser = argparse.ArgumentParser(
+        exit_on_error=False, allow_abbrev=False, add_help=False
+    )
+    try:
+        proc = subprocess.run(
+            subcmd,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        help_text = proc.stdout.splitlines()
+    except Exception:
+        # If help text cannot be retrieved, return options unchanged
+        return options
+
+    for line in help_text:
+        match = option_regex.match(line)
+        if match:
+            action = "store" if match.groups()[2] else "store_true"
+            flags = [flag for flag in match.groups()[:-1] if flag]
+            try:
+                parser.add_argument(*flags, action=action)
+            except Exception:
+                # If an odd line causes an argparse error, skip it
+                continue
 
     # remove unknown options from the given options
     valid_options = options.copy()
-    unknowns = p.parse_known_args(valid_options)[1]
+    unknowns = parser.parse_known_args(valid_options)[1]
     # some args may match unknowns but actually be valid because they
     # provide a value for a valid flag, store these "safe" indices here
-    uk_safe_index = {}
+    unknown_safe_indices = {}
     # iterate until we've accounted for all the unknown options
     while unknowns:
-        ukd = {}  # candidate indices of where to remove unknowns
-        for uk in set(unknowns):
-            ukd[uk] = [
+        unknown_candidate_indices = {}  # candidate indices of where to remove unknowns
+        for unknown_flag in set(unknowns):
+            unknown_candidate_indices[unknown_flag] = [
                 idx
                 for idx, opt in enumerate(valid_options)
-                if (opt == uk and idx not in uk_safe_index.get(uk, []))
+                if (opt == unknown_flag and idx not in unknown_safe_indices.get(unknown_flag, []))
             ]
-        uk = unknowns.pop(0)
-        # find and remove an invalid occurence of uk
+        unknown_flag = unknowns.pop(0)
+        # find and remove an invalid occurence of unknown_flag
         while True:
-            valid_options_tmp = valid_options.copy()
-            valid_options_tmp.pop(ukd[uk][0])
+            candidate_options = valid_options.copy()
+            candidate_options.pop(unknown_candidate_indices[unknown_flag][0])
             try:
-                if p.parse_known_args(valid_options_tmp)[1] == unknowns:
-                    valid_options.pop(ukd[uk][0])
+                if parser.parse_known_args(candidate_options)[1] == unknowns:
+                    valid_options.pop(unknown_candidate_indices[unknown_flag][0])
                     break
             except argparse.ArgumentError:
                 pass
-            uk_safe_index.setdefault(uk, []).append(ukd[uk].pop(0))
+            unknown_safe_indices.setdefault(unknown_flag, []).append(unknown_candidate_indices[unknown_flag].pop(0))
     return valid_options
+
+# Backward compatibility aliases
+def parametersFromPassthrough(cmd, passthrough):
+    return parameters_from_passthrough(cmd, passthrough)
+
+def filterValidOptions(options, subcmd, option_regex=None):
+    return filter_valid_options(options, subcmd, option_regex)
