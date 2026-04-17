@@ -4,6 +4,7 @@ help: Enable OpenMPI/PMIx Support
 env: ENABLE_OPENMPI_PMIX
 conflicts: ["mpich", "cuda-mpi", "openmpi-pmi2"]
 depends_on: ["pmix"]
+additional_args: ["--pmix"]
 shared_run: False
 bind:
   - /etc/libibverbs.d:/etc/libibverbs.d
