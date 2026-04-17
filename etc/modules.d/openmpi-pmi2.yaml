@@ -1,9 +1,0 @@
-name: openmpi-pmi2
-cli_arg: openmpi-pmi2
-help: Enable OpenMPI/PMI2 Support
-env: ENABLE_OPENMPI_PMI2
-conflicts: ["mpich", "cuda-mpi", "openmpi-pmix"]
-depends_on: ["pmi2"]
-shared_run: True
-bind:
-  - /etc/libibverbs.d:/etc/libibverbs.d
