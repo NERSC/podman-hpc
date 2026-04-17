@@ -23,4 +23,3 @@ bind:
   - /var/spool/slurmd:/var/spool/slurmd
   - /run/munge:/run/munge
   - /run/nscd:/run/nscd
-  - /etc/libibverbs.d:/etc/libibverbs.d
