@@ -28,23 +28,23 @@ if [[ "${1:-}" == "wait" ]]; then
     exit 0
 fi
 
-ARGS="$*"
-F="$(echo "${ARGS}" | sed 's/,upperdir.*//' | sed 's/.*lowerdir=//' | sed 's/.*://')"
-echo "In fow ${F}.squash" >> "${LOG}"
-if [[ -e "${F}.squash" ]]; then
-    echo "Mount squash ${F} with ${SQUASHFUSE_BIN}" >> "${LOG}"
-    "${SQUASHFUSE_BIN}" "${F}.squash" "${F}" >> "${LOG}" 2>&1
+args="$*"
+lowerdir_path="$(echo "${args}" | sed 's/,upperdir.*//' | sed 's/.*lowerdir=//' | sed 's/.*://')"
+echo "In fow ${lowerdir_path}.squash" >> "${LOG}"
+if [[ -e "${lowerdir_path}.squash" ]]; then
+    echo "Mount squash ${lowerdir_path} with ${SQUASHFUSE_BIN}" >> "${LOG}"
+    "${SQUASHFUSE_BIN}" "${lowerdir_path}.squash" "${lowerdir_path}" >> "${LOG}" 2>&1
 fi
 
 "${FUSE_OVERLAYFS_BIN}" "$@" >> "${LOG}" 2>&1
-RET=$?
-mount_dir="$(echo "${ARGS}" | sed 's/.* //')"
+ret=$?
+mount_dir="$(echo "${args}" | sed 's/.* //')"
 chmod a+rx "${mount_dir}"
 echo "${mount_dir}" >> "${LOG}"
 ls -ld "${mount_dir}" >> "${LOG}"
 
-if [[ -e "${F}.squash" ]]; then
-    "$0" wait "${mount_dir}" "${F}" 0<&- &>/dev/null &
+if [[ -e "${lowerdir_path}.squash" ]]; then
+    "$0" wait "${mount_dir}" "${lowerdir_path}" 0<&- &>/dev/null &
 fi
 
-exit "${RET}"
+exit "${ret}"
