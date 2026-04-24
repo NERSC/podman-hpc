@@ -1,48 +1,50 @@
 #!/bin/bash
 
-LOG=/tmp/fow-$(id -u).log
-LOG=/dev/null
+set -u
 
-UMOUNT_WAIT_RETRIES=${UMOUNT_WAIT_RETRIES:-"5"}
-UMOUNT_WAIT_DELAY=${UMOUNT_WAIT_DELAY:-"1"}
+LOG="${LOG:-/dev/null}"
+UMOUNT_WAIT_RETRIES="${UMOUNT_WAIT_RETRIES:-5}"
+UMOUNT_WAIT_DELAY="${UMOUNT_WAIT_DELAY:-1}"
+FUSE_OVERLAYFS_BIN="${FUSE_OVERLAYFS_BIN:-/usr/bin/fuse-overlayfs}"
 
-if [ "$1" = "wait" ] ; then
-    inotifywait -e delete $2/etc
+if [[ -x /usr/bin/squashfuse_ll ]]; then
+    SQUASHFUSE_BIN="${SQUASHFUSE_BIN:-/usr/bin/squashfuse_ll}"
+else
+    SQUASHFUSE_BIN="${SQUASHFUSE_BIN:-/usr/bin/squashfuse}"
+fi
 
-    for i in $(seq $UMOUNT_WAIT_RETRIES); do
-        umount -v $3 >> $LOG 2>&1
-        if [ $? -ne 0 ]; then
-            # Sleep to let podman clean up
-            echo "Retry umount after sleep $UMOUNT_WAIT_DELAY second(s)" >> $LOG
-            sleep $UMOUNT_WAIT_DELAY
+if [[ "${1:-}" == "wait" ]]; then
+    inotifywait -e delete "$2/etc"
+
+    for i in $(seq "${UMOUNT_WAIT_RETRIES}"); do
+        umount -v "$3" >> "${LOG}" 2>&1
+        if [[ $? -ne 0 ]]; then
+            echo "Retry umount after sleep ${UMOUNT_WAIT_DELAY} second(s)" >> "${LOG}"
+            sleep "${UMOUNT_WAIT_DELAY}"
         else
             break
         fi
     done
-    exit
+    exit 0
 fi
 
-F=$(echo $@|sed 's/,upperdir.*//'|sed 's/.*lowerdir=//'|sed 's/.*://')
-echo "In fow $F.squash" >> $LOG
-if [ -e "${F}.squash" ] ; then
-        echo "Mount squash $F" >> $LOG
-        /usr/bin/squashfuse $F.squash $F >> $LOG 2>&1
+args="$*"
+lowerdir_path="$(echo "${args}" | sed 's/,upperdir.*//' | sed 's/.*lowerdir=//' | sed 's/.*://')"
+echo "In fow ${lowerdir_path}.squash" >> "${LOG}"
+if [[ -e "${lowerdir_path}.squash" ]]; then
+    echo "Mount squash ${lowerdir_path} with ${SQUASHFUSE_BIN}" >> "${LOG}"
+    "${SQUASHFUSE_BIN}" "${lowerdir_path}.squash" "${lowerdir_path}" >> "${LOG}" 2>&1
 fi
 
-#echo "Doing fuse mount" >> $LOG
-/usr/bin/fuse-overlayfs $@ >> $LOG 2>&1
-RET=$?
-D=$(echo $@|sed 's/.* //')
-chmod a+rx ${D}
-echo "$D" >> $LOG
-ls -ld $D >> $LOG
+"${FUSE_OVERLAYFS_BIN}" "$@" >> "${LOG}" 2>&1
+ret=$?
+mount_dir="$(echo "${args}" | sed 's/.* //')"
+chmod a+rx "${mount_dir}"
+echo "${mount_dir}" >> "${LOG}"
+ls -ld "${mount_dir}" >> "${LOG}"
 
-# Start a process to watch the mount and unmount squash
-# if possible
-if [ -e "${F}.squash" ] ; then
-        D=$(echo $@|sed 's/.* //')
-        $0 wait $D $F  0<&- &>/dev/null &
+if [[ -e "${lowerdir_path}.squash" ]]; then
+    "$0" wait "${mount_dir}" "${lowerdir_path}" 0<&- &>/dev/null &
 fi
 
-#sleep infinity
-exit $RET
+exit "${ret}"
