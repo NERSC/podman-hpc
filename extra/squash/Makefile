@@ -9,5 +9,5 @@ rpm: mksquashfs.static
 
 mksquashfs.static:
 	podman build -t mksq .
-	podman run -it --rm -v $(shell pwd):/d  mksq cp /usr/local/bin/mksquashfs /d/mksquashfs.static
+	podman run -it --rm -v $(shell pwd):/d:Z  mksq cp /usr/local/bin/mksquashfs /d/mksquashfs.static
 	
