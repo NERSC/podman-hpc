@@ -119,7 +119,7 @@ class ImageStore:
         the minimum directories and JSON files.
         """
         if self.read_only:
-            raise ValueError("Cannot init read-only stroage")
+            raise ValueError("Cannot init read-only storage")
 
         if not os.path.exists(self.base):
             os.mkdir(self.base)
@@ -159,7 +159,7 @@ class ImageStore:
         key: key name for the ID
         """
         if self.read_only:
-            raise ValueError("Cannot init read-only stroage")
+            raise ValueError("Cannot init read-only storage")
 
         fn = os.path.join(self.base, f"overlay-{otype}", f"{otype}.json")
         data = json.load(open(fn))
@@ -184,7 +184,7 @@ class ImageStore:
         tags: list of tags
         """
         if self.read_only:
-            raise ValueError("Cannot init read-only stroage")
+            raise ValueError("Cannot init read-only storage")
 
         data = self.images
  
@@ -207,7 +207,7 @@ class ImageStore:
               for duplicate IDs.
         """
         if self.read_only:
-            raise ValueError("Cannot init read-only stroage")
+            raise ValueError("Cannot init read-only storage")
 
         fn = os.path.join(self.base, f"overlay-{otype}", f"{otype}.json")
         data = json.load(open(fn))
@@ -241,7 +241,7 @@ class ImageStore:
         same content remain visible in the destination store.
         """
         if self.read_only:
-            raise ValueError("Cannot init read-only stroage")
+            raise ValueError("Cannot init read-only storage")
 
         data = json.load(open(self.images_json))
         changed = False
