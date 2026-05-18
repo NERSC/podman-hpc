@@ -101,10 +101,18 @@ def test_migrate_remove(src, tmp_path, mocker):
     assert resp
     assert get_count(mu.dst.images_json, img) == 1
 
+    migrated = json.load(open(mu.dst.images_json))[0]
+    layer = migrated["layer"]
+    link = mu.dst.read_link_file(layer)
+    sqf = mu.dst.get_squash_filename(link)
+    open(sqf, "w").close()
+
     # Test removing the image
     resp = mu.remove_image(img)
     assert resp
     assert get_count(mu.dst.images_json, img) == 0
+    assert not os.path.exists(sqf)
+    assert not os.path.exists(os.path.join(tmp_path, "overlay", layer))
 
 
 def test_migrate_existing_image_adds_new_tag(src, tmp_path, mocker):
@@ -131,3 +139,41 @@ def test_migrate_existing_image_adds_new_tag(src, tmp_path, mocker):
     assert mu.migrate_image(img_edge)
     assert get_count(mu.dst.images_json, img_latest) == 1
     assert get_count(mu.dst.images_json, img_edge) == 1
+
+
+def test_remove_image_only_drops_requested_tag_until_history_empty(
+    src, tmp_path, mocker
+):
+    img_latest = "docker.io/library/alpine:latest"
+    img_edge = "docker.io/library/alpine:edge"
+    src_copy = tmp_path / "src"
+    dst = tmp_path / "dst"
+    copytree(src, src_copy)
+
+    src_images = src_copy / "overlay-images" / "images.json"
+    data = json.load(open(src_images))
+    data[0]["names"].append(img_edge)
+    data[0]["names-history"].append(img_edge)
+    json.dump(data, open(src_images, "w"))
+
+    popen = mocker.patch("podman_hpc.migrate2scratch.Popen")
+    popen.return_value = mockproc()
+
+    mu = MigrateUtils(src=str(src_copy), dst=str(dst))
+    assert mu.migrate_image(img_latest)
+
+    migrated = json.load(open(mu.dst.images_json))[0]
+    layer = migrated["layer"]
+    link = mu.dst.read_link_file(layer)
+    sqf = mu.dst.get_squash_filename(link)
+    open(sqf, "w").close()
+
+    assert mu.remove_image(img_edge)
+    remaining = json.load(open(mu.dst.images_json))[0]
+    assert remaining["names"] == [img_latest]
+    assert remaining["names-history"] == [img_latest]
+    assert os.path.exists(sqf)
+
+    assert mu.remove_image(img_latest)
+    assert json.load(open(mu.dst.images_json)) == []
+    assert not os.path.exists(sqf)

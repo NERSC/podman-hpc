@@ -2,6 +2,7 @@
 import os
 import sys
 import json
+from shutil import rmtree
 from shutil import copytree, copy, which
 from subprocess import Popen, PIPE
 import logging
@@ -270,6 +271,50 @@ class ImageStore:
             logging.debug(f"Updated {self.images_json}")
             self.refresh()
 
+    def remove_image_tag(self, img_id, tag):
+        """
+        Remove a tag from an image record.
+
+        Returns the updated record, or None when the image record no longer
+        has any tag history and should be fully deleted.
+        """
+        if self.read_only:
+            raise ValueError("Cannot init read-only storage")
+
+        data = json.load(open(self.images_json))
+        changed = False
+        for idx, row in enumerate(data):
+            if row["id"] != img_id:
+                continue
+
+            updated = dict(row)
+            if tag in updated.get("names", []):
+                updated["names"] = [
+                    name for name in updated["names"] if name != tag
+                ]
+                changed = True
+            if tag in updated.get("names-history", []):
+                updated["names-history"] = [
+                    name for name in updated["names-history"]
+                    if name != tag
+                ]
+                changed = True
+
+            if not updated.get("names-history", []):
+                del data[idx]
+                updated = None
+                changed = True
+            else:
+                data[idx] = updated
+
+            if changed:
+                json.dump(data, open(self.images_json, "w"))
+                logging.debug(f"Updated {self.images_json}")
+                self.refresh()
+            return updated
+
+        return None
+
     def get_squash_filename(self, link):
         return os.path.join(self.overlay_dir, "l", f"{link}.squash")
 
@@ -474,6 +519,30 @@ class MigrateUtils:
         logging.info("Created squash image")
         return True
 
+    def _delete_migrated_image_data(self, img_id, top_id):
+        # The squashed payload is stored in the top layer for migrated images.
+        ln = self.dst.read_link_file(top_id)
+        sqf = self.dst.get_squash_filename(ln)
+        if os.path.exists(sqf):
+            logging.info("Removing squash file")
+            os.unlink(sqf)
+
+        link_path = os.path.join(self.dst.overlay_dir, "l", ln)
+        if os.path.lexists(link_path):
+            os.unlink(link_path)
+
+        overlay_path = os.path.join(self.dst.overlay_dir, top_id)
+        if os.path.exists(overlay_path):
+            rmtree(overlay_path)
+
+        layer_blob = os.path.join(self.dst.layers_dir, f"{top_id}.tar-split.gz")
+        if os.path.exists(layer_blob):
+            os.unlink(layer_blob)
+
+        self.dst.del_rec("layers", top_id)
+        logging.info("Removing image record")
+        self.dst.del_rec("images", img_id)
+
     def migrate_image(self, image):
         self._lazy_init()
         logging.debug(f"Migrating {image}")
@@ -531,23 +600,17 @@ class MigrateUtils:
         self._lazy_init()
         logging.debug(f"Removing {image}")
         self.dst.refresh()
-        img_info, _ = self.dst.get_img_info(image)
+        img_info, fullname = self.dst.get_img_info(image)
         if not img_info:
             logging.error(f"Image {image} not found\n")
             return False
         img_id = img_info["id"]
         top_id = img_info["layer"]
-        # Get the layers from the manifest
-        rld = self._get_img_layers(self.dst, top_id)
+        tag = fullname or image
 
-        # make sure the src squash file exist
-        ln = self.dst.read_link_file(top_id)
-        sqf = self.dst.get_squash_filename(ln)
-        if os.path.exists(sqf):
-            logging.info("Removing squash file")
-            os.unlink(sqf)
-        logging.info("Removing image record")
-        self.dst.del_rec("images", img_id)
+        updated = self.dst.remove_image_tag(img_id, tag)
+        if updated is None:
+            self._delete_migrated_image_data(img_id, top_id)
         return True
 
 
