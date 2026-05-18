@@ -245,26 +245,31 @@ class ImageStore:
             raise ValueError("Cannot init read-only storage")
 
         data = json.load(open(self.images_json))
-        changed = False
+        existing_idx = None
+        existing_row = None
         for idx, row in enumerate(data):
-            if row["id"] != img_info["id"]:
-                continue
-            updated = dict(row)
-            updated.update(img_info)
-            updated["names"] = self._merge_unique(
-                row.get("names", []), img_info.get("names", [])
-            )
-            updated["names-history"] = self._merge_unique(
-                row.get("names-history", []),
-                img_info.get("names-history", []) + img_info.get("names", []),
-            )
-            if updated != row:
-                data[idx] = updated
-                changed = True
-            break
-        else:
+            if row["id"] == img_info["id"]:
+                existing_idx = idx
+                existing_row = row
+                break
+
+        changed = False
+        if existing_row is None:
             data.append(img_info)
             changed = True
+        else:
+            updated = dict(existing_row)
+            updated.update(img_info)
+            updated["names"] = self._merge_unique(
+                existing_row.get("names", []), img_info.get("names", [])
+            )
+            updated["names-history"] = self._merge_unique(
+                existing_row.get("names-history", []),
+                img_info.get("names-history", []) + img_info.get("names", []),
+            )
+            if updated != existing_row:
+                data[existing_idx] = updated
+                changed = True
 
         if changed:
             json.dump(data, open(self.images_json, "w"))
@@ -282,38 +287,44 @@ class ImageStore:
             raise ValueError("Cannot init read-only storage")
 
         data = json.load(open(self.images_json))
-        changed = False
+        existing_idx = None
+        existing_row = None
         for idx, row in enumerate(data):
-            if row["id"] != img_id:
-                continue
+            if row["id"] == img_id:
+                existing_idx = idx
+                existing_row = row
+                break
 
-            updated = dict(row)
-            if tag in updated.get("names", []):
-                updated["names"] = [
-                    name for name in updated["names"] if name != tag
-                ]
-                changed = True
-            if tag in updated.get("names-history", []):
-                updated["names-history"] = [
-                    name for name in updated["names-history"]
-                    if name != tag
-                ]
-                changed = True
+        if existing_row is None:
+            return None
 
-            if not updated.get("names-history", []):
-                del data[idx]
-                updated = None
-                changed = True
-            else:
-                data[idx] = updated
+        updated = dict(existing_row)
+        changed = False
+        if tag in updated.get("names", []):
+            updated["names"] = [
+                name for name in updated["names"] if name != tag
+            ]
+            changed = True
+        if tag in updated.get("names-history", []):
+            updated["names-history"] = [
+                name for name in updated["names-history"]
+                if name != tag
+            ]
+            changed = True
 
-            if changed:
-                json.dump(data, open(self.images_json, "w"))
-                logging.debug(f"Updated {self.images_json}")
-                self.refresh()
-            return updated
+        if not updated.get("names-history", []):
+            del data[existing_idx]
+            updated = None
+            changed = True
+        else:
+            data[existing_idx] = updated
 
-        return None
+        if changed:
+            json.dump(data, open(self.images_json, "w"))
+            logging.debug(f"Updated {self.images_json}")
+            self.refresh()
+
+        return updated
 
     def get_squash_filename(self, link):
         return os.path.join(self.overlay_dir, "l", f"{link}.squash")

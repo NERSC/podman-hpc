@@ -116,8 +116,8 @@ def test_migrate_remove(src, tmp_path, mocker):
 
 
 def test_migrate_existing_image_adds_new_tag(src, tmp_path, mocker):
-    img_latest = "docker.io/library/alpine:latest"
-    img_edge = "docker.io/library/alpine:edge"
+    img_latest = "docker.io/library/ubuntu:jammy"
+    img_edge = "docker.io/library/ubuntu:22.04"
     src_copy = tmp_path / "src"
     dst = tmp_path / "dst"
     copytree(src, src_copy)
@@ -144,8 +144,8 @@ def test_migrate_existing_image_adds_new_tag(src, tmp_path, mocker):
 def test_remove_image_only_drops_requested_tag_until_history_empty(
     src, tmp_path, mocker
 ):
-    img_latest = "docker.io/library/alpine:latest"
-    img_edge = "docker.io/library/alpine:edge"
+    img_latest = "docker.io/library/ubuntu:jammy"
+    img_edge = "docker.io/library/ubuntu:22.04"
     src_copy = tmp_path / "src"
     dst = tmp_path / "dst"
     copytree(src, src_copy)
