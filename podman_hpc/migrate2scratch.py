@@ -73,9 +73,30 @@ class ImageStore:
                 return img, img["id"]
         if ":" not in img_name:
             img_name = f"{img_name}:latest"
-        prefs = ["", "docker.io/", "docker.io/library/", "localhost/"]
-        for pref in prefs:
-            long_name = f"{pref}{img_name}"
+
+        long_names = [img_name]
+        first_part = img_name.split("/", 1)[0]
+        has_registry = "/" in img_name and (
+            "." in first_part or ":" in first_part
+            or first_part == "localhost"
+        )
+
+        if not has_registry:
+            long_names.extend([
+                f"docker.io/{img_name}",
+                f"docker.io/library/{img_name}",
+                f"localhost/{img_name}",
+            ])
+        elif img_name.startswith("docker.io/"):
+            remainder = img_name[len("docker.io/"):]
+            if "/" not in remainder:
+                long_names.append(f"docker.io/library/{remainder}")
+        elif img_name.startswith("docker.io/library/"):
+            remainder = img_name[len("docker.io/library/"):]
+            if "/" not in remainder:
+                long_names.append(f"docker.io/{remainder}")
+
+        for long_name in long_names:
             for img in self.images:
                 for n in img.get("names", []):
                     if long_name == n:

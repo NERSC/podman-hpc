@@ -54,6 +54,15 @@ def test_bad_image_name(src):
         mu.migrate_image("balpine")
 
 
+def test_get_img_info_fully_qualified_dockerhub_name(src):
+    mu = MigrateUtils(src=src, dst="/tmp/unused")
+    mu._lazy_init()
+
+    img, fullname = mu.src.get_img_info("docker.io/alpine:latest")
+    assert img is not None
+    assert fullname == "docker.io/library/alpine:latest"
+
+
 def test_migrate_remove(src, tmp_path, mocker):
     img = "docker.io/library/alpine:latest"
     hash = "9c6f0724472873bb50a2ae67a9e7adcb57673a183cea8b06eb778dca859181b5"
