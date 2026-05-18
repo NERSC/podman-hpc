@@ -2,6 +2,7 @@ from podman_hpc.migrate2scratch import MigrateUtils
 import os
 import json
 import pytest
+from shutil import copytree
 from tempfile import TemporaryDirectory
 
 
@@ -95,3 +96,29 @@ def test_migrate_remove(src, tmp_path, mocker):
     resp = mu.remove_image(img)
     assert resp
     assert get_count(mu.dst.images_json, img) == 0
+
+
+def test_migrate_existing_image_adds_new_tag(src, tmp_path, mocker):
+    img_latest = "docker.io/library/alpine:latest"
+    img_edge = "docker.io/library/alpine:edge"
+    src_copy = tmp_path / "src"
+    dst = tmp_path / "dst"
+    copytree(src, src_copy)
+
+    src_images = src_copy / "overlay-images" / "images.json"
+    data = json.load(open(src_images))
+    data[0]["names"].append(img_edge)
+    data[0]["names-history"].append(img_edge)
+    json.dump(data, open(src_images, "w"))
+
+    popen = mocker.patch("podman_hpc.migrate2scratch.Popen")
+    popen.return_value = mockproc()
+
+    mu = MigrateUtils(src=str(src_copy), dst=str(dst))
+    assert mu.migrate_image(img_latest)
+    assert get_count(mu.dst.images_json, img_latest) == 1
+    assert get_count(mu.dst.images_json, img_edge) == 1
+
+    assert mu.migrate_image(img_edge)
+    assert get_count(mu.dst.images_json, img_latest) == 1
+    assert get_count(mu.dst.images_json, img_edge) == 1

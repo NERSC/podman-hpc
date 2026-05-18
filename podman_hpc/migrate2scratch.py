@@ -204,6 +204,51 @@ class ImageStore:
             logging.debug(f"Updated {fn}")
             self.refresh()
 
+    @staticmethod
+    def _merge_unique(existing, new):
+        merged = []
+        for item in existing + new:
+            if item not in merged:
+                merged.append(item)
+        return merged
+
+    def upsert_image(self, img_info):
+        """
+        Add or update an image record in images.json.
+
+        For an existing image ID, merge tag metadata so alternate names for the
+        same content remain visible in the destination store.
+        """
+        if self.read_only:
+            raise ValueError("Cannot init read-only stroage")
+
+        data = json.load(open(self.images_json))
+        changed = False
+        for idx, row in enumerate(data):
+            if row["id"] != img_info["id"]:
+                continue
+            updated = dict(row)
+            updated.update(img_info)
+            updated["names"] = self._merge_unique(
+                row.get("names", []), img_info.get("names", [])
+            )
+            updated["names-history"] = self._merge_unique(
+                row.get("names-history", []),
+                img_info.get("names-history", []) + img_info.get("names", []),
+            )
+            if updated != row:
+                data[idx] = updated
+                changed = True
+            break
+        else:
+            data.append(img_info)
+            changed = True
+
+        if changed:
+            json.dump(data, open(self.images_json, "w"))
+            logging.debug(f"Updated {self.images_json}")
+            self.refresh()
+
     def get_squash_filename(self, link):
         return os.path.join(self.overlay_dir, "l", f"{link}.squash")
 
@@ -429,15 +474,17 @@ class MigrateUtils:
         # make sure the src squash file exist
         logging.debug(f"Reading link: {top_id}")
 
-        if self.dst.chk_image(img_id):
-            logging.info("Previously migrated")
-            return True
-
         # Check if previously tagged image exist
         dimg = None
         if fullname:
             dimg, _ = self.dst.get_img_info(fullname)
-        self.dst.drop_tag(img_info["names"])
+        if dimg and dimg["id"] != img_id:
+            self.dst.drop_tag(img_info["names"])
+
+        if self.dst.chk_image(img_id):
+            logging.info("Previously migrated")
+            self.dst.upsert_image(img_info)
+            return True
 
         # Copy image info
         self._copy_image_info(img_id)
@@ -456,7 +503,7 @@ class MigrateUtils:
 
         # Add img to images.json
         # Save this for the end so things are all ready
-        self.dst.add_recs("images", [img_info])
+        self.dst.upsert_image(img_info)
         return True
 
     def remove_image(self, image):
