@@ -124,8 +124,8 @@ def test_migrate_existing_image_adds_new_tag(src, tmp_path, mocker):
 
     src_images = src_copy / "overlay-images" / "images.json"
     data = json.load(open(src_images))
-    data[0]["names"].append(img_edge)
-    data[0]["names-history"].append(img_edge)
+    data[0]["names"] = [img_latest, img_edge]
+    data[0]["names-history"] = [img_latest, img_edge]
     json.dump(data, open(src_images, "w"))
 
     popen = mocker.patch("podman_hpc.migrate2scratch.Popen")
@@ -152,8 +152,8 @@ def test_remove_image_only_drops_requested_tag_until_history_empty(
 
     src_images = src_copy / "overlay-images" / "images.json"
     data = json.load(open(src_images))
-    data[0]["names"].append(img_edge)
-    data[0]["names-history"].append(img_edge)
+    data[0]["names"] = [img_latest, img_edge]
+    data[0]["names-history"] = [img_latest, img_edge]
     json.dump(data, open(src_images, "w"))
 
     popen = mocker.patch("podman_hpc.migrate2scratch.Popen")
