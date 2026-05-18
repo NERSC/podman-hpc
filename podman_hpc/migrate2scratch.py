@@ -617,6 +617,10 @@ class MigrateUtils:
             return False
         img_id = img_info["id"]
         top_id = img_info["layer"]
+        if fullname == img_id:
+            self._delete_migrated_image_data(img_id, top_id)
+            return True
+
         tag = fullname or image
 
         updated = self.dst.remove_image_tag(img_id, tag)

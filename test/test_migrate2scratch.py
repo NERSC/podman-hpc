@@ -114,6 +114,19 @@ def test_migrate_remove(src, tmp_path, mocker):
     assert not os.path.exists(sqf)
     assert not os.path.exists(os.path.join(tmp_path, "overlay", layer))
 
+    assert mu.migrate_image(img)
+    migrated = json.load(open(mu.dst.images_json))[0]
+    layer = migrated["layer"]
+    link = mu.dst.read_link_file(layer)
+    sqf = mu.dst.get_squash_filename(link)
+    open(sqf, "w").close()
+
+    resp = mu.remove_image(hash)
+    assert resp
+    assert get_count(mu.dst.images_json, img) == 0
+    assert not os.path.exists(sqf)
+    assert not os.path.exists(os.path.join(tmp_path, "overlay", layer))
+
 
 def test_migrate_existing_image_adds_new_tag(src, tmp_path, mocker):
     img_latest = "docker.io/library/ubuntu:jammy"
