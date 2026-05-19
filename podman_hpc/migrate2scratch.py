@@ -2,6 +2,7 @@
 import os
 import sys
 import json
+from shutil import rmtree
 from shutil import copytree, copy, which
 from subprocess import Popen, PIPE
 import logging
@@ -73,9 +74,30 @@ class ImageStore:
                 return img, img["id"]
         if ":" not in img_name:
             img_name = f"{img_name}:latest"
-        prefs = ["", "docker.io/", "docker.io/library/", "localhost/"]
-        for pref in prefs:
-            long_name = f"{pref}{img_name}"
+
+        long_names = [img_name]
+        first_part = img_name.split("/", 1)[0]
+        has_registry = "/" in img_name and (
+            "." in first_part or ":" in first_part
+            or first_part == "localhost"
+        )
+
+        if not has_registry:
+            long_names.extend([
+                f"docker.io/{img_name}",
+                f"docker.io/library/{img_name}",
+                f"localhost/{img_name}",
+            ])
+        elif img_name.startswith("docker.io/"):
+            remainder = img_name[len("docker.io/"):]
+            if "/" not in remainder:
+                long_names.append(f"docker.io/library/{remainder}")
+        elif img_name.startswith("docker.io/library/"):
+            remainder = img_name[len("docker.io/library/"):]
+            if "/" not in remainder:
+                long_names.append(f"docker.io/{remainder}")
+
+        for long_name in long_names:
             for img in self.images:
                 for n in img.get("names", []):
                     if long_name == n:
@@ -98,7 +120,7 @@ class ImageStore:
         the minimum directories and JSON files.
         """
         if self.read_only:
-            raise ValueError("Cannot init read-only stroage")
+            raise ValueError("Cannot init read-only storage")
 
         if not os.path.exists(self.base):
             os.mkdir(self.base)
@@ -138,7 +160,7 @@ class ImageStore:
         key: key name for the ID
         """
         if self.read_only:
-            raise ValueError("Cannot init read-only stroage")
+            raise ValueError("Cannot init read-only storage")
 
         fn = os.path.join(self.base, f"overlay-{otype}", f"{otype}.json")
         data = json.load(open(fn))
@@ -163,7 +185,7 @@ class ImageStore:
         tags: list of tags
         """
         if self.read_only:
-            raise ValueError("Cannot init read-only stroage")
+            raise ValueError("Cannot init read-only storage")
 
         data = self.images
  
@@ -186,7 +208,7 @@ class ImageStore:
               for duplicate IDs.
         """
         if self.read_only:
-            raise ValueError("Cannot init read-only stroage")
+            raise ValueError("Cannot init read-only storage")
 
         fn = os.path.join(self.base, f"overlay-{otype}", f"{otype}.json")
         data = json.load(open(fn))
@@ -203,6 +225,106 @@ class ImageStore:
             json.dump(data, open(fn, "w"))
             logging.debug(f"Updated {fn}")
             self.refresh()
+
+    @staticmethod
+    def _merge_unique(existing, new):
+        merged = []
+        for item in existing + new:
+            if item not in merged:
+                merged.append(item)
+        return merged
+
+    def upsert_image(self, img_info):
+        """
+        Add or update an image record in images.json.
+
+        For an existing image ID, merge tag metadata so alternate names for the
+        same content remain visible in the destination store.
+        """
+        if self.read_only:
+            raise ValueError("Cannot init read-only storage")
+
+        data = json.load(open(self.images_json))
+        existing_idx = None
+        existing_row = None
+        for idx, row in enumerate(data):
+            if row["id"] == img_info["id"]:
+                existing_idx = idx
+                existing_row = row
+                break
+
+        changed = False
+        if existing_row is None:
+            data.append(img_info)
+            changed = True
+        else:
+            updated = dict(existing_row)
+            updated.update(img_info)
+            updated["names"] = self._merge_unique(
+                existing_row.get("names", []), img_info.get("names", [])
+            )
+            updated["names-history"] = self._merge_unique(
+                existing_row.get("names-history", []),
+                img_info.get("names-history", []) + img_info.get("names", []),
+            )
+            if updated != existing_row:
+                data[existing_idx] = updated
+                changed = True
+
+        if changed:
+            json.dump(data, open(self.images_json, "w"))
+            logging.debug(f"Updated {self.images_json}")
+            self.refresh()
+
+    def remove_image_tag(self, img_id, tag):
+        """
+        Remove a tag from an image record.
+
+        Returns the updated record, or None when the image record no longer
+        has any tag history and should be fully deleted.
+        """
+        if self.read_only:
+            raise ValueError("Cannot init read-only storage")
+
+        data = json.load(open(self.images_json))
+        existing_idx = None
+        existing_row = None
+        for idx, row in enumerate(data):
+            if row["id"] == img_id:
+                existing_idx = idx
+                existing_row = row
+                break
+
+        if existing_row is None:
+            return None
+
+        updated = dict(existing_row)
+        changed = False
+        if tag in updated.get("names", []):
+            updated["names"] = [
+                name for name in updated["names"] if name != tag
+            ]
+            changed = True
+        if tag in updated.get("names-history", []):
+            updated["names-history"] = [
+                name for name in updated["names-history"]
+                if name != tag
+            ]
+            changed = True
+
+        if not updated.get("names-history", []):
+            del data[existing_idx]
+            updated = None
+            changed = True
+        else:
+            data[existing_idx] = updated
+
+        if changed:
+            json.dump(data, open(self.images_json, "w"))
+            logging.debug(f"Updated {self.images_json}")
+            self.refresh()
+
+        return updated
 
     def get_squash_filename(self, link):
         return os.path.join(self.overlay_dir, "l", f"{link}.squash")
@@ -408,6 +530,30 @@ class MigrateUtils:
         logging.info("Created squash image")
         return True
 
+    def _delete_migrated_image_data(self, img_id, top_id):
+        # The squashed payload is stored in the top layer for migrated images.
+        ln = self.dst.read_link_file(top_id)
+        sqf = self.dst.get_squash_filename(ln)
+        if os.path.exists(sqf):
+            logging.info("Removing squash file")
+            os.unlink(sqf)
+
+        link_path = os.path.join(self.dst.overlay_dir, "l", ln)
+        if os.path.lexists(link_path):
+            os.unlink(link_path)
+
+        overlay_path = os.path.join(self.dst.overlay_dir, top_id)
+        if os.path.exists(overlay_path):
+            rmtree(overlay_path)
+
+        layer_blob = os.path.join(self.dst.layers_dir, f"{top_id}.tar-split.gz")
+        if os.path.exists(layer_blob):
+            os.unlink(layer_blob)
+
+        self.dst.del_rec("layers", top_id)
+        logging.info("Removing image record")
+        self.dst.del_rec("images", img_id)
+
     def migrate_image(self, image):
         self._lazy_init()
         logging.debug(f"Migrating {image}")
@@ -429,15 +575,17 @@ class MigrateUtils:
         # make sure the src squash file exist
         logging.debug(f"Reading link: {top_id}")
 
-        if self.dst.chk_image(img_id):
-            logging.info("Previously migrated")
-            return True
-
         # Check if previously tagged image exist
         dimg = None
         if fullname:
             dimg, _ = self.dst.get_img_info(fullname)
-        self.dst.drop_tag(img_info["names"])
+        if dimg and dimg["id"] != img_id:
+            self.dst.drop_tag(img_info["names"])
+
+        if self.dst.chk_image(img_id):
+            logging.info("Previously migrated")
+            self.dst.upsert_image(img_info)
+            return True
 
         # Copy image info
         self._copy_image_info(img_id)
@@ -456,30 +604,28 @@ class MigrateUtils:
 
         # Add img to images.json
         # Save this for the end so things are all ready
-        self.dst.add_recs("images", [img_info])
+        self.dst.upsert_image(img_info)
         return True
 
     def remove_image(self, image):
         self._lazy_init()
         logging.debug(f"Removing {image}")
         self.dst.refresh()
-        img_info, _ = self.dst.get_img_info(image)
+        img_info, fullname = self.dst.get_img_info(image)
         if not img_info:
             logging.error(f"Image {image} not found\n")
             return False
         img_id = img_info["id"]
         top_id = img_info["layer"]
-        # Get the layers from the manifest
-        rld = self._get_img_layers(self.dst, top_id)
+        if fullname == img_id:
+            self._delete_migrated_image_data(img_id, top_id)
+            return True
 
-        # make sure the src squash file exist
-        ln = self.dst.read_link_file(top_id)
-        sqf = self.dst.get_squash_filename(ln)
-        if os.path.exists(sqf):
-            logging.info("Removing squash file")
-            os.unlink(sqf)
-        logging.info("Removing image record")
-        self.dst.del_rec("images", img_id)
+        tag = fullname or image
+
+        updated = self.dst.remove_image_tag(img_id, tag)
+        if updated is None:
+            self._delete_migrated_image_data(img_id, top_id)
         return True
 
 
