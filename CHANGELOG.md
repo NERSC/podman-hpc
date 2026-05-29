@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-05-29
+
+This release includes updates since v1.1.4.
+
+### Added
+
+- Add support for migrating images that have multiple tags pointing to the same image ID, preserving all tag names in the destination store.
+- Add module dependency and conflict warnings for site modules, including conflicts between MPI module variants.
+- Add a hook debugging helper script and documentation under `extra/hook-debug`.
+- Add tests for Docker Hub library image name resolution, multi-tag migration, and image removal behavior.
+
+### Changed
+
+- Prefer `squashfuse_ll` in the `fuse-overlayfs` wrapper when available, while keeping `SQUASHFUSE_BIN` and `FUSE_OVERLAYFS_BIN` overrides.
+- Update NCCL module configuration to use the `nccl-plugin` layout and newer dependency paths.
+
+### Fixed
+
+- Fix image migration lookup for fully qualified Docker Hub library images such as `docker.io/alpine:latest`.
+- Fix removal of migrated images so deleting one tag only removes that tag until the image has no remaining tag history.
+- Fix deletion by image ID to remove the migrated image record, layer metadata, overlay directory, link, and squash file.
+- Fix typo in read-only storage error messages.
+
 ## [1.1.4] - 2024-12-23
 
 - Fixes a regression in the migration where the wrong layer was linked to the migrated image.
