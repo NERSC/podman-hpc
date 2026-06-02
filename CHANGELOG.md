@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2026-06-01
+
+This is a patch release to fix a bug in the publishing pipeline.
+
+### Fixed
+
+- Update PyPa publishing action version to fix release build pipeline.
+
 ## [1.2.0] - 2026-05-29
 
 This release includes updates since v1.1.4.
