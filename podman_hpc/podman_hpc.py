@@ -291,6 +291,11 @@ def _shared_run(conf, run_args, **site_opts):
         cpt.filterValidOptions(options, [conf.podman_bin, "run", "--help"])
     )
     run_cmd.extend(conf.get_cmd_extensions("run", site_opts))
+    # shared-run starts a persistent per-node container and then launches
+    # application ranks with podman exec. Ignore the image entrypoint for the
+    # keepalive container so ENTRYPOINT ["/bin/bash"] does not wrap
+    # "sleep infinity" as "/bin/bash sleep infinity".
+    run_cmd.append("--entrypoint=")
     run_cmd.append(image)
     run_cmd.extend(conf.shared_run_command)
 
