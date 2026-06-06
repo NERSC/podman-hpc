@@ -22,14 +22,14 @@ if _monkeypatch_pep625:
 
 class build_py_with_make_epilogue(build_py):
     def run(self):
-        super(build_py, self).run()
+        super(build_py_with_make_epilogue, self).run()
         subprocess.run(['make', 'setuptools-build_py'], check=True)
 
 class sdist_pep625(sdist):
     def make_distribution(self):
         if _monkeypatch_pep625:
             self.distribution.get_fullname = MethodType(_get_fullname_canonicalized, self.distribution)
-        super(sdist, self).make_distribution()
+        super(sdist_pep625, self).make_distribution()
 
 if __name__ == "__main__":
     setup(cmdclass={'build_py': build_py_with_make_epilogue, 'sdist': sdist_pep625})
