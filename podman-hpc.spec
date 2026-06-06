@@ -12,6 +12,13 @@
 # license that conforms to the Open Source Definition (Version 1.9)
 # published by the Open Source Initiative.
 
+%define pypa() %{lua:
+x = rpm.expand('%1')
+for _,s in ipairs({'-','%.'}) do
+  x,_ = string.gsub(x,s,'_')
+end
+print(x)
+}
 
 Name:           podman-hpc
 Version:        1.2.2
@@ -20,7 +27,7 @@ Summary:	Scripts to enable Podman to run in an HPC environment
 # FIXME: Select a correct license from https://github.com/openSUSE/spec-cleaner#spdx-licenses
 License:        Apache 2.0 
 URL:            https://github.com/nersc/podman-hpc 
-Source:         %{name}-%{version}.tar.gz
+Source:         %{pypa %{python_dist_name %name}}-%{version}.tar.gz
 BuildRequires:  python3
 Requires:       podman
 Requires:       python3-toml
@@ -34,7 +41,7 @@ effectively and scale in an HPC environment.  It is designed to
 run fully unprivileged.
 
 %prep
-%setup -q
+%setup -q -n %{pypa %{python_dist_name %name}}-%{version}
 
 %build
 
