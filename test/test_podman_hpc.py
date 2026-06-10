@@ -93,6 +93,7 @@ def test_shared_run(monkeypatch, fix_paths, mock_podman, mock_exit):
     assert "--root" in run
     assert f"/tmp/{uid}_hpc/storage" in run
     assert "--name" in run
+    assert "--entrypoint=" in run
     assert "ubuntu" in run
     assert exec is not None
     assert exec[-1] == "uptime"
