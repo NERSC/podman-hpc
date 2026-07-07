@@ -1,0 +1,25 @@
+name: pmix
+cli_arg: pmix
+help: Enable PMIx Support
+env: ENABLE_PMIX
+conflicts: ["mpich", "cuda-mpi", "pmi2"]
+shared_run: False
+additional_args:
+  - --userns=keep-id
+  - -e SLURM_*
+  - -e SLURMD_*
+  - -e PALS_*
+  - -e PMI_*
+  - -e PMIX_*
+  - --ipc=host
+  - --network=host
+  - --pid=host
+  - --privileged
+bind:
+  - /dev/xpmem:/dev/xpmem
+  - /dev/shm:/dev/shm
+  - /dev/ss0:/dev/ss0
+  - /dev/cxi*:/dev/
+  - /var/spool/slurmd:/var/spool/slurmd
+  - /run/munge:/run/munge
+  - /run/nscd:/run/nscd
