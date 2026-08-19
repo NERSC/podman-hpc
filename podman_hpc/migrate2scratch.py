@@ -263,7 +263,9 @@ class ImageStore:
         Add or update an image record in images.json.
 
         For an existing image ID, merge tag metadata so alternate names for the
-        same content remain visible in the destination store.
+        same content remain visible in the destination store.  Remove active
+        tags from other image IDs in the same update so tag reassignment is
+        published atomically with the new image record.
         """
         if self.read_only:
             raise ValueError("Cannot init read-only storage")
@@ -271,13 +273,24 @@ class ImageStore:
         data = json.load(open(self.images_json))
         existing_idx = None
         existing_row = None
+        image_names = set(img_info.get("names", []))
+        changed = False
         for idx, row in enumerate(data):
             if row["id"] == img_info["id"]:
                 existing_idx = idx
                 existing_row = row
-                break
+                continue
 
-        changed = False
+            names = row.get("names", [])
+            updated_names = [
+                name for name in names if name not in image_names
+            ]
+            if updated_names != names:
+                updated = dict(row)
+                updated["names"] = updated_names
+                data[idx] = updated
+                changed = True
+
         if existing_row is None:
             data.append(img_info)
             changed = True
@@ -528,16 +541,20 @@ class MigrateUtils:
             return self.dst.read_link_file(top_id)
         return self.src.read_link_file(top_id)
 
-    def _mksq(self, img_id, top_id):
+    def _mksq(self, img_id, top_id, reuse_existing=True):
         # Get the link name
         ln = self._get_squash_link(top_id)
         _mksqstatic = self.mksq_bin
         if not _mksqstatic.startswith("/"):
             _mksqstatic = which(_mksqstatic)
         tgt = self.dst.get_squash_filename(ln)
-        if os.path.exists(tgt):
+        if os.path.exists(tgt) and reuse_existing:
             logging.info("Squash file already generated")
             return True
+        if os.path.exists(tgt):
+            logging.warning(
+                "Regenerating squash file without a committed image record"
+            )
         logging.info(f"Generating squash file {tgt}")
 
         # Generate outside the active overlay store.  If podman-hpc is
@@ -623,7 +640,7 @@ class MigrateUtils:
         self.dst.refresh()
         # Read in json data
 
-        img_info, fullname = self.src.get_img_info(image)
+        img_info, _ = self.src.get_img_info(image)
         if not img_info:
             logging.error(f"Image {image} not found\n")
             return False
@@ -636,14 +653,8 @@ class MigrateUtils:
         # make sure the src squash file exist
         logging.debug(f"Reading link: {top_id}")
 
-        # Check if previously tagged image exist
-        dimg = None
-        if fullname:
-            dimg, _ = self.dst.get_img_info(fullname)
-        if dimg and dimg["id"] != img_id:
-            self.dst.drop_tag(img_info["names"])
-
-        if self.dst.chk_image(img_id):
+        image_committed = self.dst.chk_image(img_id)
+        if image_committed:
             ln = self._get_squash_link(top_id)
             sqf = self.dst.get_squash_filename(ln)
             if os.path.exists(sqf):
@@ -659,7 +670,9 @@ class MigrateUtils:
         # directories or layer metadata.  A failed or interrupted migration
         # therefore cannot shadow the same layer in another image store.
         logging.debug(f"squashing {img_id}")
-        resp = self._mksq(img_id, top_id)
+        resp = self._mksq(
+            img_id, top_id, reuse_existing=image_committed
+        )
         if not resp:
             return False
 

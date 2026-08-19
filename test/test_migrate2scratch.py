@@ -51,7 +51,8 @@ def successful_squash(cmd, *args, **kwargs):
             sqout = cmd[idx + 1].rsplit(":", 1)[0]
             break
     output = next(arg for arg in cmd if arg.startswith("/sqout/"))
-    open(os.path.join(sqout, os.path.basename(output)), "w").close()
+    with open(os.path.join(sqout, os.path.basename(output)), "w") as f:
+        f.write("complete")
     return mockproc()
 
 
@@ -126,11 +127,13 @@ def test_migrate_remove(src, tmp_path, monkeypatch):
     with open(imgf, "w") as f:
         json.dump([bimg], f)
     mu.dst.refresh()
+    images_before_failure = json.load(open(mu.dst.images_json))
 
     # Mock squash failing
     popen.return_value = mockproc(rcode=1)
     resp = mu.migrate_image(img)
     assert resp is False
+    assert json.load(open(mu.dst.images_json)) == images_before_failure
     src_img, _ = mu.src.get_img_info(img)
     top_layer = src_img["layer"]
     top_link = mu.src.read_link_file(top_layer)
@@ -146,6 +149,9 @@ def test_migrate_remove(src, tmp_path, monkeypatch):
     resp = mu.migrate_image(img)
     assert resp
     assert get_count(mu.dst.images_json, img) == 1
+    images = json.load(open(mu.dst.images_json))
+    old_image = next(row for row in images if row["id"] == bimg["id"])
+    assert old_image["names"] == []
     popen.assert_called()
 
     # Remigrate to test check logic
@@ -158,7 +164,10 @@ def test_migrate_remove(src, tmp_path, monkeypatch):
     assert resp
     assert get_count(mu.dst.images_json, img) == 1
 
-    migrated = json.load(open(mu.dst.images_json))[0]
+    migrated = next(
+        row for row in json.load(open(mu.dst.images_json))
+        if row["id"] == hash
+    )
     layer = migrated["layer"]
     link = mu.dst.read_link_file(layer)
     sqf = mu.dst.get_squash_filename(link)
@@ -172,7 +181,10 @@ def test_migrate_remove(src, tmp_path, monkeypatch):
     assert not os.path.exists(os.path.join(tmp_path, "overlay", layer))
 
     assert mu.migrate_image(img)
-    migrated = json.load(open(mu.dst.images_json))[0]
+    migrated = next(
+        row for row in json.load(open(mu.dst.images_json))
+        if row["id"] == hash
+    )
     layer = migrated["layer"]
     link = mu.dst.read_link_file(layer)
     sqf = mu.dst.get_squash_filename(link)
@@ -251,7 +263,7 @@ def test_remove_image_only_drops_requested_tag_until_history_empty(
     assert not os.path.exists(sqf)
 
 
-def test_migrate_repairs_incomplete_destination(src, tmp_path, monkeypatch):
+def test_migrate_repairs_orphaned_layer_metadata(src, tmp_path, monkeypatch):
     img = "docker.io/library/alpine:latest"
     dst = tmp_path / "dst"
     popen = mockpopen()
@@ -277,6 +289,46 @@ def test_migrate_repairs_incomplete_destination(src, tmp_path, monkeypatch):
     assert not os.path.exists(squash)
     assert json.load(open(mu.dst.images_json)) == []
 
+    # The old direct-write flow may also have left an incomplete squash file.
+    with open(squash, "w") as f:
+        f.write("partial")
+
+    assert mu.migrate_image(img)
+    assert os.path.exists(squash)
+    assert open(squash).read() == "complete"
+    assert get_count(mu.dst.images_json, img) == 1
+    assert popen.call_count == 1
+
+
+def test_migrate_repairs_image_record_missing_squash(
+    src, tmp_path, monkeypatch
+):
+    img = "docker.io/library/alpine:latest"
+    dst = tmp_path / "dst"
+    popen = mockpopen()
+    popen.side_effect = successful_squash
+    monkeypatch.setattr("podman_hpc.migrate2scratch.Popen", popen)
+
+    mu = MigrateUtils(src=src, dst=str(dst))
+    mu._lazy_init()
+    mu.dst.init_storage()
+    mu.src.refresh()
+    mu.dst.refresh()
+
+    img_info, _ = mu.src.get_img_info(img)
+    top_layer = img_info["layer"]
+    layers = mu._get_img_layers(mu.src, top_layer)
+    mu._copy_image_info(img_info["id"])
+    mu._copy_required_layers(layers)
+    mu._copy_overlay(img_info["id"], layers)
+    mu.dst.upsert_image(img_info)
+
+    link = mu.dst.read_link_file(top_layer)
+    squash = mu.dst.get_squash_filename(link)
+    assert mu.dst.chk_image(img_info["id"])
+    assert not os.path.exists(squash)
+
     assert mu.migrate_image(img)
     assert os.path.exists(squash)
     assert get_count(mu.dst.images_json, img) == 1
+    assert popen.call_count == 1
