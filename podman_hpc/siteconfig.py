@@ -67,7 +67,7 @@ class SiteConfig:
     shared_run = False
     source = dict()
 
-    def __init__(self, squash_dir=None, log_level=None):
+    def __init__(self, squash_dir=None, log_level=None, cdi_spec_dir=None):
 
         # getlogin may fail on a compute node
         try:
@@ -138,6 +138,7 @@ class SiteConfig:
             self.default_images_args = []
         
         self.log_level = log_level
+        self.cdi_spec_dir = cdi_spec_dir
 
     def dump_config(self):
         """
@@ -408,6 +409,8 @@ class SiteConfig:
         warnings.formatwarning = original_formatwarning
         if self.log_level:
             cmds.extend(["--log-level", self.log_level])
+        for d in self.cdi_spec_dir or []:
+            cmds.extend(["--cdi-spec-dir", d])
         return cmds
 
     # TODO - This manually indicates that site modules apply to podman
