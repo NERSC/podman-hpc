@@ -111,7 +111,8 @@ pass_siteconf = click.make_pass_decorator(SiteConfig, ensure=True)
     help="Specify alternate squash directory location",
 )
 @click.option("--log-level", type=str, default="fatal", hidden=True)
-def podhpc(ctx, additional_stores, squash_dir, log_level):
+@click.option("--cdi-spec-dir", type=str, multiple=True, hidden=True)
+def podhpc(ctx, additional_stores, squash_dir, log_level, cdi_spec_dir):
     """Manage pods, containers and images ... on HPC!
 
     The podman-hpc utility is a wrapper script around the podman
@@ -126,7 +127,8 @@ def podhpc(ctx, additional_stores, squash_dir, log_level):
 
     # set up site configuration object
     try:
-        conf = SiteConfig(squash_dir=squash_dir, log_level=log_level)
+        conf = SiteConfig(squash_dir=squash_dir, log_level=log_level,
+                          cdi_spec_dir=cdi_spec_dir)
     except Exception as ex:
         sys.stderr.write(f"Error: {ex}... Exiting\n")
         sys.exit(1)
