@@ -69,11 +69,13 @@ def copy(src, tgt, symlinks=True):
 def ldconfig():
     if not os.path.exists("/sbin/ldconfig"):
         return
-    ret = "unknown"
     try:
-        ret = subprocess.check_output(["/sbin/ldconfig"])
-    except subprocess.CalledProcessError:
-        log(f"ldconfig failed: {ret}")
+        subprocess.check_output(["/sbin/ldconfig"], stderr=subprocess.STDOUT)
+    except subprocess.CalledProcessError as exc:
+        log(f"ldconfig failed with exit code {exc.returncode}: {exc.output.decode(errors='replace')}")
+    except OSError as exc:
+        log(f"ldconfig execution failed: {type(exc).__name__}: {exc}")
+        raise
 
 
 def resolve_src_and_dest(rule, root_path, modulesd=os.path.abspath("")):
