@@ -5,6 +5,7 @@ import json
 from shutil import rmtree
 from shutil import copytree, copy, which
 from subprocess import Popen, PIPE
+from tempfile import TemporaryDirectory
 import logging
 
 DEBUG = os.environ.get("DEBUG_M2SQ", False)
@@ -150,6 +151,29 @@ class ImageStore:
                 return True
         return False
 
+    def _write_json(self, fn, data):
+        """
+        Atomically replace a store metadata file.
+
+        Build the replacement under the destination store so the final
+        os.replace() is a same-filesystem rename.  Readers therefore see
+        either the old complete JSON document or the new complete document,
+        never a partially written file.
+        """
+        mode = None
+        if os.path.exists(fn):
+            mode = os.stat(fn).st_mode & 0o7777
+
+        with TemporaryDirectory(
+            prefix=".podman-hpc-metadata-", dir=os.path.dirname(fn)
+        ) as staging_dir:
+            staged_fn = os.path.join(staging_dir, os.path.basename(fn))
+            with open(staged_fn, "w") as f:
+                json.dump(data, f)
+            if mode is not None:
+                os.chmod(staged_fn, mode)
+            os.replace(staged_fn, fn)
+
     def del_rec(self, otype, id, key="id"):
         """
         Deletes a record from a JSON file
@@ -172,7 +196,7 @@ class ImageStore:
                 continue
             out.append(rec)
         if changed:
-            json.dump(out, open(fn, "w"))
+            self._write_json(fn, out)
             logging.debug(f"Updated {fn}")
 
     def drop_tag(self, tags):
@@ -193,7 +217,7 @@ class ImageStore:
             for tag in tags:
                 if tag in img['names']:
                     img['names'].remove(tag)
-        json.dump(data, open(self.images_json, "w"))
+        self._write_json(self.images_json, data)
         self.images = data
 
     def add_recs(self, otype, recs):
@@ -222,7 +246,7 @@ class ImageStore:
                 data.append(rec)
                 changed = True
         if changed:
-            json.dump(data, open(fn, "w"))
+            self._write_json(fn, data)
             logging.debug(f"Updated {fn}")
             self.refresh()
 
@@ -239,7 +263,9 @@ class ImageStore:
         Add or update an image record in images.json.
 
         For an existing image ID, merge tag metadata so alternate names for the
-        same content remain visible in the destination store.
+        same content remain visible in the destination store.  Remove active
+        tags from other image IDs in the same update so tag reassignment is
+        published atomically with the new image record.
         """
         if self.read_only:
             raise ValueError("Cannot init read-only storage")
@@ -247,13 +273,24 @@ class ImageStore:
         data = json.load(open(self.images_json))
         existing_idx = None
         existing_row = None
+        image_names = set(img_info.get("names", []))
+        changed = False
         for idx, row in enumerate(data):
             if row["id"] == img_info["id"]:
                 existing_idx = idx
                 existing_row = row
-                break
+                continue
 
-        changed = False
+            names = row.get("names", [])
+            updated_names = [
+                name for name in names if name not in image_names
+            ]
+            if updated_names != names:
+                updated = dict(row)
+                updated["names"] = updated_names
+                data[idx] = updated
+                changed = True
+
         if existing_row is None:
             data.append(img_info)
             changed = True
@@ -272,7 +309,7 @@ class ImageStore:
                 changed = True
 
         if changed:
-            json.dump(data, open(self.images_json, "w"))
+            self._write_json(self.images_json, data)
             logging.debug(f"Updated {self.images_json}")
             self.refresh()
 
@@ -320,7 +357,7 @@ class ImageStore:
             data[existing_idx] = updated
 
         if changed:
-            json.dump(data, open(self.images_json, "w"))
+            self._write_json(self.images_json, data)
             logging.debug(f"Updated {self.images_json}")
             self.refresh()
 
@@ -490,42 +527,83 @@ class MigrateUtils:
                 logging.debug(f"Copy {src} to {dst}")
                 copy(src, dst)
 
-    def _mksq(self, img_id, top_id):
+    def _get_squash_link(self, top_id):
+        """
+        Return the link name used for a migrated image's squash file.
+
+        Prefer an existing destination link so retrying an incomplete
+        migration repairs the existing overlay entry.  New migrations use
+        the source store's link, which is copied to the destination after the
+        squash file has been created successfully.
+        """
+        dst_link = os.path.join(self.dst.overlay_dir, top_id, "link")
+        if os.path.exists(dst_link):
+            return self.dst.read_link_file(top_id)
+        return self.src.read_link_file(top_id)
+
+    def _mksq(self, img_id, top_id, reuse_existing=True):
         # Get the link name
-        ln = self.dst.read_link_file(top_id)
+        ln = self._get_squash_link(top_id)
         _mksqstatic = self.mksq_bin
         if not _mksqstatic.startswith("/"):
             _mksqstatic = which(_mksqstatic)
         tgt = self.dst.get_squash_filename(ln)
-        if os.path.exists(tgt):
+        if os.path.exists(tgt) and reuse_existing:
             logging.info("Squash file already generated")
             return True
+        if os.path.exists(tgt):
+            logging.warning(
+                "Regenerating squash file without a committed image record"
+            )
         logging.info(f"Generating squash file {tgt}")
-        # To make the squash file we will start up a container
-        # with the tgt image and then run mksq in it.
-        # This requires a statically linked mksquashfs
-        com = [
-            self.podman_bin, "run", "--rm",
-            "--root", self.src.base,
-            "-v", f"{_mksqstatic}:{self._mksq_inside}",
-            "-v", f"{self.dst.base}/overlay/l/:/sqout",
-            "--user", "0",
-            "--entrypoint", self._mksq_inside,
-            img_id,
-            "/", f"/sqout/{ln}.squash",
-        ]
-        com.extend(self.mksq_options)
-        # Exclude these
-        for ex in self.exclude_list:
-            com.extend(["-e", ex])
-        proc = Popen(com, stdout=PIPE, stderr=PIPE, env=os.environ)
-        out, err = proc.communicate()
 
-        if proc.returncode != 0:
-            logging.error("Squash Failed")
-            logging.error(out.decode("utf-8"))
-            logging.error(err.decode("utf-8"))
-            return False
+        # Generate outside the active overlay store.  If podman-hpc is
+        # interrupted, the incomplete file is not visible as an image layer.
+        # The completed squash is atomically published before any destination
+        # overlay directories or layer records are copied.
+        with TemporaryDirectory(
+            prefix=".podman-hpc-migrate-", dir=self.dst.base
+        ) as staging_dir:
+            staged_tgt = os.path.join(staging_dir, f"{ln}.squash")
+
+            # To make the squash file we will start up a container with the
+            # target image and then run mksq in it.  This requires a statically
+            # linked mksquashfs.
+            com = [
+                self.podman_bin, "run", "--rm",
+                "--root", self.src.base,
+                "-v", f"{_mksqstatic}:{self._mksq_inside}",
+                "-v", f"{staging_dir}:/sqout",
+                "--user", "0",
+                "--entrypoint", self._mksq_inside,
+                img_id,
+                "/", f"/sqout/{ln}.squash",
+            ]
+            com.extend(self.mksq_options)
+            # Exclude these
+            for ex in self.exclude_list:
+                com.extend(["-e", ex])
+            proc = Popen(com, stdout=PIPE, stderr=PIPE, env=os.environ)
+            out, err = proc.communicate()
+
+            if proc.returncode != 0:
+                logging.error("Squash Failed")
+                logging.error(out.decode("utf-8"))
+                logging.error(err.decode("utf-8"))
+                return False
+
+            if not os.path.exists(staged_tgt):
+                logging.error(
+                    "Squash command succeeded but did not create "
+                    f"{staged_tgt}"
+                )
+                return False
+
+            try:
+                os.replace(staged_tgt, tgt)
+            except OSError as ex:
+                logging.error(f"Failed to publish squash file: {ex}")
+                return False
 
         logging.info("Created squash image")
         return True
@@ -562,7 +640,7 @@ class MigrateUtils:
         self.dst.refresh()
         # Read in json data
 
-        img_info, fullname = self.src.get_img_info(image)
+        img_info, _ = self.src.get_img_info(image)
         if not img_info:
             logging.error(f"Image {image} not found\n")
             return False
@@ -575,32 +653,37 @@ class MigrateUtils:
         # make sure the src squash file exist
         logging.debug(f"Reading link: {top_id}")
 
-        # Check if previously tagged image exist
-        dimg = None
-        if fullname:
-            dimg, _ = self.dst.get_img_info(fullname)
-        if dimg and dimg["id"] != img_id:
-            self.dst.drop_tag(img_info["names"])
+        image_committed = self.dst.chk_image(img_id)
+        if image_committed:
+            ln = self._get_squash_link(top_id)
+            sqf = self.dst.get_squash_filename(ln)
+            if os.path.exists(sqf):
+                logging.info("Previously migrated")
+                self.dst.upsert_image(img_info)
+                return True
+            logging.warning(
+                "Image metadata exists without a squash file; "
+                "repairing incomplete migration"
+            )
 
-        if self.dst.chk_image(img_id):
-            logging.info("Previously migrated")
-            self.dst.upsert_image(img_info)
-            return True
+        # Generate and publish the squash before exposing destination overlay
+        # directories or layer metadata.  A failed or interrupted migration
+        # therefore cannot shadow the same layer in another image store.
+        logging.debug(f"squashing {img_id}")
+        resp = self._mksq(
+            img_id, top_id, reuse_existing=image_committed
+        )
+        if not resp:
+            return False
 
         # Copy image info
         self._copy_image_info(img_id)
 
-        # Copy layers
-        self._copy_required_layers(rld)
-
-        # Overlay
+        # Build the destination overlay before publishing layer records.
         self._copy_overlay(img_id, rld)
 
-        # Generate squash
-        logging.debug(f"squashing {img_id}")
-        resp = self._mksq(img_id, top_id)
-        if not resp:
-            return False
+        # Copy layer blobs, then atomically publish layers.json.
+        self._copy_required_layers(rld)
 
         # Add img to images.json
         # Save this for the end so things are all ready
