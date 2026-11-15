@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: subxid
+    app.kubernetes.io/name: subxid-service
+    app.kubernetes.io/instance: subxid-service
+  name: subxid-service
+  namespace: {{ .Values.namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: subxid
+      app.kubernetes.io/name: subxid-service
+      app.kubernetes.io/instance: subxid-service
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: subxid
+        app.kubernetes.io/name: subxid-service
+        app.kubernetes.io/instance: subxid-service
+    spec:
+      containers:
+      - image: {{ .Values.subxidService.image }}
+        imagePullPolicy: Always
+        name: subxid-service
+        resources: {}
+        securityContext:
+          allowPrivilegeEscalation: false
+          privileged: false
+          readOnlyRootFilesystem: false
+          runAsNonRoot: false
+        stdin: true
+        tty: true
+        volumeMounts:
+        - mountPath: /subxid-html
+          name: subxid-storage
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: subxid-storage
+        persistentVolumeClaim:
+          claimName: subxid-pvc
