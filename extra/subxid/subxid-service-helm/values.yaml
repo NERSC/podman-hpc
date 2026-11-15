@@ -1,0 +1,21 @@
+
+namespace: subxid
+
+subxidService:
+  image: myorg/subxid-service:latest
+
+subxidWeb:
+  image: nginx:stable-alpine
+  replicas: 1
+  port: 80
+  
+subxidPVC:
+  storage: 1Gi
+
+
+ingress:
+  enabled: True
+
+service:
+  type: "ClusterIP"
+  port: "80"

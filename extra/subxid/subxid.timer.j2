@@ -1,0 +1,12 @@
+[Unit]
+Description=Do hourly subxid update
+
+[Timer]
+OnCalendar=hourly
+AccuracySec=1us
+Persistent=true
+OnBootSec=15min
+RandomizedDelaySec=600
+
+[Install]
+WantedBy=timers.target
